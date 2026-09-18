@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -18,8 +18,19 @@ import { useNavigation } from '@react-navigation/native';
 
 export const AccountScreen: React.FC = () => {
   const [loadingProvider, setLoadingProvider] = useState<'google' | 'azure' | null>(null);
-  const { signInWithGoogle, signInWithMicrosoft } = useAuth();
+  const { signInWithGoogle, signInWithMicrosoft, domainNotAllowed, clearDomainNotAllowed } = useAuth();
   const navigation = useNavigation<any>();
+
+  // Sur Android, le retour OAuth peut arriver bien après que ce composant ait
+  // fini son propre appel (process relancé par le deep link) : le rejet
+  // "domaine non autorisé" remonte alors via ce flag global plutôt que par la
+  // promesse de handleSignIn.
+  useEffect(() => {
+    if (domainNotAllowed) {
+      clearDomainNotAllowed();
+      navigation.navigate('DomainNotAllowed');
+    }
+  }, [domainNotAllowed, clearDomainNotAllowed, navigation]);
 
   const handleSignIn = async (provider: 'google' | 'azure') => {
     setLoadingProvider(provider);

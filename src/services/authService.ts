@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import { supabase } from './supabase';
@@ -5,7 +6,7 @@ import { User } from '../types/user';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const redirectTo = AuthSession.makeRedirectUri({ scheme: 'miageconnect' });
+export const oauthRedirectPrefix = AuthSession.makeRedirectUri({ scheme: 'miageconnect' });
 
 // Levée quand le compte OAuth a bien été créé côté Supabase mais que le
 // domaine de l'adresse n'est (plus) rattaché à aucune association fédérée
@@ -36,14 +37,58 @@ async function mapProfileToUser(userId: string, email: string): Promise<User> {
   };
 }
 
+// Termine la connexion à partir de l'URL de retour (miageconnect://...#access_token=
+// ou ?code=...). Appelée soit juste après la fermeture du navigateur (web),
+// soit par le listener global de deep link (natif) — voir AuthContext, car sur
+// Android le process peut être tué par l'OS pendant que l'utilisateur est sur
+// l'écran Google, ce qui rend inutilisable la promesse initiale du bouton.
+export async function completeOAuthRedirect(url: string): Promise<User> {
+  const callbackUrl = new URL(url);
+  const code = callbackUrl.searchParams.get('code');
+  const hashParams = new URLSearchParams(callbackUrl.hash.replace(/^#/, ''));
+
+  if (code) {
+    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+    if (exchangeError) throw exchangeError;
+  } else if (hashParams.get('access_token')) {
+    const { error: setError } = await supabase.auth.setSession({
+      access_token: hashParams.get('access_token')!,
+      refresh_token: hashParams.get('refresh_token') || '',
+    });
+    if (setError) throw setError;
+  } else if (hashParams.get('error_description')) {
+    throw new Error(decodeURIComponent(hashParams.get('error_description')!));
+  } else {
+    throw new Error('Réponse de connexion invalide');
+  }
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error('Session introuvable après connexion');
+
+  // Rattache/crée le profil via le domaine autorisé et pose valid_until.
+  const { error: ensureError } = await supabase.rpc('ensure_my_profile');
+  if (ensureError) {
+    await supabase.auth.signOut();
+    throw new DomainNotAllowedError();
+  }
+
+  return mapProfileToUser(session.user.id, session.user.email || '');
+}
+
 export const authService = {
   // Seule voie d'entrée désormais : OAuth Google ou Microsoft, filtré par
   // domaine côté base (trigger "before user created" + ensure_my_profile()).
-  async signInWithProvider(provider: 'google' | 'azure'): Promise<User> {
+  //
+  // Web : flux classique, on attend la fermeture du popup puis on termine
+  // l'échange nous-mêmes.
+  // Natif (Android/iOS) : on ouvre juste le navigateur système et on rend la
+  // main. Le retour est intercepté globalement par AuthContext via Linking,
+  // ce qui fonctionne même si Android tue le process pendant l'auth.
+  async signInWithProvider(provider: 'google' | 'azure'): Promise<User | null> {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo,
+        redirectTo: oauthRedirectPrefix,
         skipBrowserRedirect: true,
       },
     });
@@ -51,42 +96,16 @@ export const authService = {
     if (error) throw error;
     if (!data?.url) throw new Error('Impossible de démarrer la connexion');
 
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-
-    if (result.type !== 'success' || !('url' in result)) {
-      throw new Error('Connexion annulée');
+    if (Platform.OS === 'web') {
+      const result = await WebBrowser.openAuthSessionAsync(data.url, oauthRedirectPrefix);
+      if (result.type !== 'success' || !('url' in result)) {
+        throw new Error('Connexion annulée');
+      }
+      return completeOAuthRedirect(result.url);
     }
 
-    const callbackUrl = new URL(result.url);
-    const code = callbackUrl.searchParams.get('code');
-    const hashParams = new URLSearchParams(callbackUrl.hash.replace(/^#/, ''));
-
-    if (code) {
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-      if (exchangeError) throw exchangeError;
-    } else if (hashParams.get('access_token')) {
-      const { error: setError } = await supabase.auth.setSession({
-        access_token: hashParams.get('access_token')!,
-        refresh_token: hashParams.get('refresh_token') || '',
-      });
-      if (setError) throw setError;
-    } else if (hashParams.get('error_description')) {
-      throw new Error(decodeURIComponent(hashParams.get('error_description')!));
-    } else {
-      throw new Error('Réponse de connexion invalide');
-    }
-
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) throw new Error('Session introuvable après connexion');
-
-    // Rattache/crée le profil via le domaine autorisé et pose valid_until.
-    const { error: ensureError } = await supabase.rpc('ensure_my_profile');
-    if (ensureError) {
-      await supabase.auth.signOut();
-      throw new DomainNotAllowedError();
-    }
-
-    return mapProfileToUser(session.user.id, session.user.email || '');
+    WebBrowser.openAuthSessionAsync(data.url, oauthRedirectPrefix).catch(() => {});
+    return null;
   },
 
   logout: async (): Promise<void> => {

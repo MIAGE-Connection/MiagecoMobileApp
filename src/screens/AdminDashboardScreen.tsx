@@ -265,6 +265,13 @@ export const AdminDashboardScreen: React.FC = () => {
                 <Ionicons name="business-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
                 <Text style={styles.roleActionText}>Associations</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.roleActionButton}
+                onPress={() => navigation.navigate('SendNotification')}
+              >
+                <Ionicons name="megaphone-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.roleActionText}>Diffuser une notif</Text>
+              </TouchableOpacity>
             </>
           )}
         </View>

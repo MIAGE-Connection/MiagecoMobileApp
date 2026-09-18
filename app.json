@@ -24,17 +24,13 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.miageconnection.app"
+      "package": "com.miageconnection.app",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {
-      "eas": {
-        "projectId": "1b10d0e7-9431-462b-9bf4-0fe81dd3ed68"
-      }
-    },
-    "owner": "nayarjay",
+    "owner": "simiageco",
     "plugins": [
       "expo-web-browser",
       [
@@ -43,6 +39,11 @@
           "color": "#4F46E5"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "701738c9-6629-487d-b426-2a24fffe0688"
+      }
+    }
   }
 }

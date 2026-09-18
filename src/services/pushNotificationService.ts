@@ -4,6 +4,19 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { supabase } from './supabase';
 
+// Par défaut, Expo n'affiche pas de bannière système quand l'app est au
+// premier plan (elle laisse le code de l'app décider). On veut quand même
+// voir les notifs pendant qu'on est dans l'app.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
 export interface NotificationPreferences {
   user_id: string;
   events_reminders: boolean;

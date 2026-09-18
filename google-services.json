@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "470286941161",
+    "project_id": "miageco-mobileapp",
+    "storage_bucket": "miageco-mobileapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:470286941161:android:51a2e7e4be1163f92da978",
+        "android_client_info": {
+          "package_name": "com.miageconnection.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "470286941161-k8tvuuvatb7vfra8poqrj0mlfnvpopuf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAnOwPoD1KR-VKjFX9bCb2NFo9OVW_cNT8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "470286941161-k8tvuuvatb7vfra8poqrj0mlfnvpopuf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

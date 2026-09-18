@@ -19,6 +19,7 @@ import { MemberHomeScreen } from '../screens/MemberHomeScreen';
 import { MembersScreen } from '../screens/MembersScreen';
 import { DomainsScreen } from '../screens/DomainsScreen';
 import { AdminAssociationsScreen } from '../screens/AdminAssociationsScreen';
+import { SendNotificationScreen } from '../screens/SendNotificationScreen';
 import { NotificationPreferencesScreen } from '../screens/NotificationPreferencesScreen';
 import { MemberDirectoryScreen } from '../screens/MemberDirectoryScreen';
 import { MemberDocumentsScreen } from '../screens/MemberDocumentsScreen';
@@ -68,6 +69,7 @@ const AccountStackNavigator: React.FC = () => {
               <>
                 <AccountStack.Screen name="Domains" component={DomainsScreen} />
                 <AccountStack.Screen name="AdminAssociations" component={AdminAssociationsScreen} />
+                <AccountStack.Screen name="SendNotification" component={SendNotificationScreen} />
               </>
             )}
           </>
