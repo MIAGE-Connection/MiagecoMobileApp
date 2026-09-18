@@ -1,10 +1,14 @@
 // Edge Function : diffusion d'une notification push par le super admin
 // (admin_national uniquement) à tous les adhérents actifs ayant activé les
-// notifications "annonces". Appelée par l'app via supabase.functions.invoke.
+// notifications "annonces". Appelée soit par l'app (supabase.functions.invoke,
+// admin authentifié), soit par le job pg_cron des notifications programmées
+// (voir supabase_phase5b_scheduled_notifications.sql), identifié par le
+// secret CRON_SECRET.
 //
 // SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY sont injectées
-// automatiquement par Supabase dans chaque Edge Function, pas besoin de les
-// configurer manuellement.
+// automatiquement par Supabase dans chaque Edge Function. CRON_SECRET doit en
+// revanche être configuré manuellement (Edge Functions > send-notification >
+// Settings > Secrets), avec la même valeur que celle mise dans le SQL du cron.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -18,48 +22,57 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Non authentifié' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const cronSecret = Deno.env.get('CRON_SECRET');
 
-    // Client "en tant qu'appelant" (respecte la RLS) pour vérifier son rôle.
-    const callerClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    // Deux façons d'être autorisé : soit un admin_national authentifié
+    // (envoi manuel depuis l'app), soit le job pg_cron des notifications
+    // programmées, identifié par un secret partagé (jamais exposé au client).
+    const isCronCall = Boolean(cronSecret) && req.headers.get('x-cron-secret') === cronSecret;
 
-    const {
-      data: { user },
-      error: userError,
-    } = await callerClient.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Session invalide' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    if (!isCronCall) {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: 'Non authentifié' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Client "en tant qu'appelant" (respecte la RLS) pour vérifier son rôle.
+      const callerClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
       });
-    }
 
-    const { data: profile, error: profileError } = await callerClient
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
+      const {
+        data: { user },
+        error: userError,
+      } = await callerClient.auth.getUser();
+      if (userError || !user) {
+        return new Response(JSON.stringify({ error: 'Session invalide' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
-    if (profileError || profile?.role !== 'admin_national') {
-      return new Response(JSON.stringify({ error: 'Réservé au super admin' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      const { data: profile, error: profileError } = await callerClient
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError || profile?.role !== 'admin_national') {
+        return new Response(JSON.stringify({ error: 'Réservé au super admin' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const { title, body } = await req.json();
+    const source = isCronCall ? 'scheduled' : 'manual';
     if (!title || !body) {
       return new Response(JSON.stringify({ error: 'title et body requis' }), {
         status: 400,
@@ -70,6 +83,10 @@ Deno.serve(async (req) => {
     // Client service_role : contourne la RLS pour agréger tous les tokens.
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
+    const recordHistory = async (sentCount: number) => {
+      await adminClient.from('notification_history').insert({ title, body, source, sent_count: sentCount });
+    };
+
     const { data: activeProfiles, error: activeError } = await adminClient
       .from('profiles')
       .select('id')
@@ -79,6 +96,7 @@ Deno.serve(async (req) => {
 
     const activeIds = (activeProfiles || []).map((p: { id: string }) => p.id);
     if (activeIds.length === 0) {
+      await recordHistory(0);
       return new Response(JSON.stringify({ sent: 0 }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -103,6 +121,7 @@ Deno.serve(async (req) => {
 
     const rows = tokenRows || [];
     if (rows.length === 0) {
+      await recordHistory(0);
       return new Response(JSON.stringify({ sent: 0 }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -156,6 +175,7 @@ Deno.serve(async (req) => {
       sent += chunk.length;
     }
 
+    await recordHistory(sent);
     return new Response(JSON.stringify({ sent }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,108 +9,72 @@ import {
   Platform,
   StatusBar,
   ActivityIndicator,
-  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { eventsService } from '../services/eventsService';
+import { Event } from '../types/event';
+import { useRemote } from '../hooks/useRemote';
+import { ErrorState } from '../components/ErrorState';
+import { DetailSheet, SheetAction, sheetStyles } from '../components/DetailSheet';
+import { addToCalendar, formatLongDate, formatTime } from '../utils/links';
 
-interface Event {
-  id: string;
-  title: string;
-  start_date?: string;
-  end_date?: string;
-  location?: string;
-  description?: string;
-  image_url?: string;
-}
-
-const FALLBACK_EVENTS: Event[] = [
-  {
-    id: '1',
-    title: 'Hackathon MIAGE',
-    start_date: '2026-06-15',
-    location: 'PARIS',
-    description: '24h de code - Prix à gagner',
-  },
-  {
-    id: '2',
-    title: 'Conférence Cloud',
-    start_date: '2026-06-10',
-    location: 'LYON',
-    description: 'Experts du cloud computing',
-  },
-  {
-    id: '3',
-    title: 'Réunion régionale',
-    start_date: '2026-06-05',
-    location: 'NANTERRE',
-    description: 'Bilan et perspectives',
-  },
-];
+const dayMonth = (iso?: string | null) => {
+  if (!iso) return 'TBD';
+  const date = new Date(iso);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = date.toLocaleString('fr-FR', { month: 'short' }).toUpperCase().replace('.', '');
+  return `${day} ${month}`;
+};
 
 export const EventsFullScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadEvents();
-  }, []);
-
-  const loadEvents = async () => {
-    setLoading(true);
-    try {
-      const data = await eventsService.getAllEvents();
-      if (data && data.length > 0) {
-        setEvents(data);
-      } else {
-        console.warn('No events from BD, using fallback');
-        setEvents(FALLBACK_EVENTS);
-      }
-    } catch (error) {
-      console.error('Error loading events:', error);
-      setEvents(FALLBACK_EVENTS);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const formatDate = (dateString?: string): string => {
-    if (!dateString) return 'TBD';
-    try {
-      const date = new Date(dateString);
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = date.toLocaleString('fr-FR', { month: 'short' }).toUpperCase();
-      return `${day} ${month}`;
-    } catch {
-      return dateString;
-    }
-  };
-
-  const renderEventCard = ({ item }: { item: Event }) => (
-    <TouchableOpacity style={styles.eventCard}>
-      <View style={styles.cardHeader}>
-        <View style={styles.dateBox}>
-          <Text style={styles.dateText}>{formatDate(item.start_date)}</Text>
-        </View>
-        <View style={styles.eventInfo}>
-          <Text style={styles.eventTitle}>{item.title}</Text>
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={12} color={colors.textLight} />
-            <Text style={styles.locationText}>{item.location || 'TBD'}</Text>
-          </View>
-        </View>
-      </View>
-      <Text style={styles.description}>{item.description || ''}</Text>
-      <TouchableOpacity style={styles.detailsButton}>
-        <Text style={styles.detailsButtonText}>Voir détails</Text>
-        <Ionicons name="chevron-forward" size={14} color={colors.primary} />
-      </TouchableOpacity>
-    </TouchableOpacity>
+  const { data, loading, refreshing, error, refresh, retry } = useRemote<Event[]>(
+    () => eventsService.getAllEvents(),
+    []
   );
+  const [selected, setSelected] = useState<Event | null>(null);
+
+  // À venir d'abord (le plus proche en premier), puis les événements passés.
+  const events = useMemo(() => {
+    const now = Date.now();
+    const upcoming = data.filter((e) => new Date(e.start_date ?? 0).getTime() >= now);
+    const past = data.filter((e) => new Date(e.start_date ?? 0).getTime() < now).reverse();
+    return [...upcoming, ...past];
+  }, [data]);
+
+  const renderEventCard = ({ item }: { item: Event }) => {
+    const past = new Date(item.start_date ?? 0).getTime() < Date.now();
+    return (
+      <TouchableOpacity
+        style={[styles.eventCard, past && styles.eventCardPast]}
+        onPress={() => setSelected(item)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.cardHeader}>
+          <View style={[styles.dateBox, past && styles.dateBoxPast]}>
+            <Text style={styles.dateText}>{dayMonth(item.start_date)}</Text>
+          </View>
+          <View style={styles.eventInfo}>
+            <Text style={styles.eventTitle}>{item.title}</Text>
+            <View style={styles.locationRow}>
+              <Ionicons name="location-outline" size={12} color={colors.textLight} />
+              <Text style={styles.locationText}>{item.location || 'Lieu à confirmer'}</Text>
+              {past ? <Text style={styles.pastTag}>Terminé</Text> : null}
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.border} />
+        </View>
+        {item.description ? (
+          <Text style={styles.description} numberOfLines={2}>
+            {item.description}
+          </Text>
+        ) : null}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -128,6 +92,8 @@ export const EventsFullScreen: React.FC = () => {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
+      ) : error && data.length === 0 ? (
+        <ErrorState onRetry={retry} />
       ) : (
         <FlatList
           data={events}
@@ -135,14 +101,35 @@ export const EventsFullScreen: React.FC = () => {
           renderItem={renderEventCard}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={refresh}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="calendar-outline" size={48} color={colors.textLight} />
-              <Text style={styles.emptyText}>Aucun événement</Text>
+              <Text style={styles.emptyText}>Aucun événement pour le moment</Text>
             </View>
           }
         />
       )}
+
+      <DetailSheet visible={!!selected} onClose={() => setSelected(null)}>
+        {selected && (
+          <>
+            <Text style={sheetStyles.title}>{selected.title}</Text>
+            <Text style={sheetStyles.meta}>
+              {formatLongDate(selected.start_date)} à {formatTime(selected.start_date)}
+              {selected.end_date ? ` – ${formatTime(selected.end_date)}` : ''}
+            </Text>
+            {selected.location ? <Text style={sheetStyles.meta}>📍 {selected.location}</Text> : null}
+            {selected.description ? (
+              <Text style={sheetStyles.body} selectable>
+                {selected.description}
+              </Text>
+            ) : null}
+            <SheetAction label="Ajouter à mon calendrier" primary onPress={() => addToCalendar(selected)} />
+          </>
+        )}
+      </DetailSheet>
     </SafeAreaView>
   );
 };
@@ -153,34 +140,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.lg,
   },
-  backButton: {
-    padding: spacing.sm,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: colors.text,
-    flex: 1,
-    textAlign: 'center',
-  },
-  spacer: {
-    width: 40,
-  },
-  listContent: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xl,
-  },
+  backButton: { width: 44, height: 44, justifyContent: 'center' },
+  title: { fontSize: 24, fontWeight: '900', color: colors.text, flex: 1, textAlign: 'center' },
+  spacer: { width: 44 },
+  listContent: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl },
   eventCard: {
     backgroundColor: colors.white,
     borderRadius: 16,
@@ -192,67 +162,25 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: spacing.md,
-  },
+  eventCardPast: { opacity: 0.6 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center' },
   dateBox: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: 8,
     marginRight: spacing.md,
-  },
-  dateText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  eventInfo: {
-    flex: 1,
-  },
-  eventTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  locationRow: {
-    flexDirection: 'row',
+    minWidth: 58,
     alignItems: 'center',
-    gap: 4,
   },
-  locationText: {
-    fontSize: 11,
-    color: colors.textLight,
-  },
-  description: {
-    fontSize: 12,
-    color: colors.textLight,
-    marginBottom: spacing.md,
-    lineHeight: 16,
-  },
-  detailsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.sm,
-  },
-  detailsButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.primary,
-    marginRight: 4,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xxl,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textLight,
-    marginTop: spacing.md,
-  },
+  dateBoxPast: { backgroundColor: colors.textLight },
+  dateText: { fontSize: 12, fontWeight: '800', color: colors.white },
+  eventInfo: { flex: 1 },
+  eventTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
+  locationText: { fontSize: 12, color: colors.textLight },
+  pastTag: { fontSize: 11, color: colors.textLight, fontWeight: '700', marginLeft: 6 },
+  description: { fontSize: 13, color: colors.textLight, lineHeight: 18, marginTop: spacing.md },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxl },
+  emptyText: { fontSize: 14, color: colors.textLight, marginTop: spacing.md },
 });

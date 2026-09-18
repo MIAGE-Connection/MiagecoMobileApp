@@ -7,6 +7,7 @@ export interface AdminNews {
   category: string;
   icon_name: string;
   url?: string;
+  image_url?: string;
   order_index: number;
   is_published?: boolean;
   published_at: string;
@@ -26,7 +27,7 @@ export const adminNewsService = {
       return data || [];
     } catch (error) {
       console.error('Error fetching admin news:', error);
-      return [];
+      throw error;
     }
   },
 };

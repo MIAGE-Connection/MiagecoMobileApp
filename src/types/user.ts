@@ -7,6 +7,8 @@ export interface User {
   position_in_association?: string;
   contact_email?: string;
   graduation_year?: number;
+  full_name?: string;
+  validUntil?: string;
 }
 
 export interface AuthState {

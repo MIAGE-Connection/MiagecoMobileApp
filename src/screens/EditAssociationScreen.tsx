@@ -10,6 +10,8 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  SafeAreaView,
+  StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,7 +27,7 @@ interface EditAssociationScreenProps {
 
 export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ route }) => {
   const navigation = useNavigation<any>();
-  const associationId = route?.params?.associationId || 'sample-id';
+  const associationId: string = route?.params?.associationId || '';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -42,6 +44,7 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
     address: '',
     city: '',
     logo_url: '',
+    instagram: '',
     members_count: '',
     mandate_events_count: '',
   });
@@ -51,6 +54,10 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
   }, []);
 
   const loadData = async () => {
+    if (!associationId) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const associationData = await associationService.getAssociationById(associationId);
@@ -59,12 +66,13 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
         setForm({
           name: associationData.name || '',
           description: associationData.description || '',
-          email: associationData.email || '',
+          email: associationData.email_contact || associationData.email || '',
           phone: associationData.phone || '',
           website_url: associationData.website_url || '',
           address: associationData.address || '',
-          city: associationData.city || '',
+          city: associationData.location || associationData.city || '',
           logo_url: associationData.logo_url || '',
+          instagram: associationData.instagram_username || '',
           members_count: associationData.members_count?.toString() || '',
           mandate_events_count: associationData.mandate_events_count?.toString() || '',
         });
@@ -99,16 +107,19 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
     setSaving(true);
     try {
       const associationData = {
-        name: form.name,
-        description: form.description,
-        email: form.email,
-        phone: form.phone,
-        website_url: form.website_url,
-        address: form.address,
-        city: form.city,
-        logo_url: form.logo_url,
-        members_count: form.members_count ? parseInt(form.members_count, 10) : undefined,
-        mandate_events_count: form.mandate_events_count ? parseInt(form.mandate_events_count, 10) : undefined,
+        description: form.description.trim(),
+        // Ce sont ces deux champs (location, email_contact) qui s'affichent dans l'annuaire
+        // public ; on garde city/email alignés pour ne pas avoir deux valeurs différentes.
+        email_contact: form.email.trim() || undefined,
+        email: form.email.trim() || undefined,
+        phone: form.phone.trim(),
+        website_url: form.website_url.trim(),
+        address: form.address.trim(),
+        location: form.city.trim() || undefined,
+        city: form.city.trim() || undefined,
+        instagram_username: form.instagram.trim().replace(/^@/, '') || undefined,
+        members_count: form.members_count ? parseInt(form.members_count, 10) || 0 : 0,
+        mandate_events_count: form.mandate_events_count ? parseInt(form.mandate_events_count, 10) || 0 : 0,
       };
 
       await associationService.updateAssociation(associationId, associationData);
@@ -126,11 +137,12 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
 
   const handleImageSelected = async (imageUri: string) => {
     try {
-      updateField('logo_url', imageUri);
-      Alert.alert('Succes', 'L\'image a ete selectionnee');
+      const url = await associationService.uploadAssociationImage(associationId, imageUri, 'logo');
+      updateField('logo_url', url);
+      showToast('Logo mis à jour', 'success');
     } catch (error) {
       console.error('Error:', error);
-      Alert.alert('Erreur', 'Impossible de traiter l\'image');
+      Alert.alert('Erreur', "Impossible d'envoyer l'image. Vérifie ta connexion et réessaie.");
     }
   };
 
@@ -143,12 +155,23 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
   }
 
   return (
+    <SafeAreaView style={styles.safe}>
+    <StatusBar barStyle="dark-content" />
+    <View style={styles.header}>
+      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} accessibilityLabel="Retour">
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
+      </TouchableOpacity>
+      <Text style={styles.headerTitle}>Mon association</Text>
+      <View style={styles.backButton} />
+    </View>
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Editer mon association</Text>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {!associationId ? (
+          <Text style={styles.helperText}>Aucune association rattachée à ton compte.</Text>
+        ) : null}
 
         <ImageUploader
           imageUrl={form.logo_url}
@@ -157,23 +180,11 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
         />
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>URL du logo</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="https://exemple.com/logo.png"
-            keyboardType="url"
-            value={form.logo_url}
-            onChangeText={(value) => updateField('logo_url', value)}
-            autoCapitalize="none"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
           <Text style={styles.label}>Nom</Text>
           <View style={styles.disabledInput}>
             <Text style={styles.disabledText}>{form.name}</Text>
           </View>
-          <Text style={styles.helperText}>Le nom de votre association ne peut pas etre modifie</Text>
+          <Text style={styles.helperText}>Le nom est géré par la fédération</Text>
         </View>
 
         <View style={styles.inputGroup}>
@@ -189,7 +200,7 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>Email de contact</Text>
           <TextInput
             style={styles.input}
             placeholder="contact@miage.fr"
@@ -212,7 +223,7 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Ville</Text>
+          <Text style={styles.label}>Ville / localisation</Text>
           <TextInput
             style={styles.input}
             placeholder="Ex: Nanterre"
@@ -244,6 +255,17 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
         </View>
 
         <View style={styles.inputGroup}>
+          <Text style={styles.label}>Instagram</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="identifiant, sans @"
+            value={form.instagram}
+            onChangeText={(value) => updateField('instagram', value)}
+            autoCapitalize="none"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
           <Text style={styles.label}>Nombre d'adherents</Text>
           <TextInput
             style={styles.input}
@@ -268,7 +290,7 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
         <TouchableOpacity
           style={styles.saveButton}
           onPress={handleSave}
-          disabled={saving}
+          disabled={saving || !associationId}
         >
           {saving ? (
             <ActivityIndicator color={colors.white} />
@@ -288,10 +310,25 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
         duration={2500}
       />
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  backButton: { width: 44, height: 44, justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
   container: {
     flex: 1,
     backgroundColor: colors.background,

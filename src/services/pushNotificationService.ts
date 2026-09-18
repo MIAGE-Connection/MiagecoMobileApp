@@ -59,15 +59,10 @@ export const pushNotificationService = {
     const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
     const expoPushToken = tokenResponse.data;
 
-    const { error } = await supabase.from('push_tokens').upsert(
-      {
-        user_id: userId,
-        expo_push_token: expoPushToken,
-        device_info: `${Device.modelName || 'unknown'} / ${Platform.OS}`,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'expo_push_token' }
-    );
+    const { error } = await supabase.rpc('register_push_token', {
+      p_token: expoPushToken,
+      p_device_info: `${Device.modelName || 'unknown'} / ${Platform.OS}`,
+    });
 
     if (error) {
       console.error('pushNotificationService: failed to save token', error);

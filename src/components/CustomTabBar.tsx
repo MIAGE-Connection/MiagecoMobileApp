@@ -4,28 +4,38 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNewCounts } from '../hooks/useNewCounts';
 
 export const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigation }) => {
-  const visibleTabs = ['Accueil', 'Hub MIAGistes', 'Actualités', 'Compte'];
+  const { total, reload } = useNewCounts();
+  // Mode bord à bord : la barre doit s'élever au-dessus des boutons/du geste système.
+  const insets = useSafeAreaInsets();
+
+  // Rafraîchit les compteurs à chaque changement d'onglet.
+  React.useEffect(() => {
+    reload();
+  }, [state.index, reload]);
+
+  // Ordre de la barre : Associations, Accueil, Compte (Actualités se lance depuis l'accueil).
+  const visibleTabs = ['Associations', 'Accueil', 'Compte'];
 
   const iconMap: { [key: string]: any } = {
     Accueil: 'home',
-    'Hub MIAGistes': 'people',
-    Actualités: 'newspaper',
+    Associations: 'people',
     Compte: 'person',
   };
 
   const colorMap: { [key: string]: string } = {
     Accueil: colors.primary,
-    'Hub MIAGistes': colors.success,
-    Actualités: colors.iconBlue,
-    Compte: colors.text,
+    Associations: colors.primary,
+    Compte: colors.primary,
   };
 
   const visibleRoutes = state.routes.filter(route => visibleTabs.includes(route.name));
 
   return (
-    <View style={styles.tabBar}>
+    <View style={[styles.tabBar, { height: 62 + Math.max(insets.bottom, 8), paddingBottom: Math.max(insets.bottom, 8) }]}>
       {visibleRoutes.map((route) => {
         const index = state.routes.findIndex(r => r.key === route.key);
         const { options } = descriptors[route.key];
@@ -52,11 +62,18 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, 
             onPress={onPress}
             activeOpacity={0.7}
           >
-            <Ionicons
-              name={isFocused ? iconName : (iconName + '-outline') as any}
-              size={24}
-              color={color}
-            />
+            <View>
+              <Ionicons
+                name={isFocused ? iconName : (iconName + '-outline') as any}
+                size={24}
+                color={color}
+              />
+              {route.name === 'Compte' && total > 0 ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{total > 9 ? '9+' : total}</Text>
+                </View>
+              ) : null}
+            </View>
             <Text style={[styles.label, { color: isFocused ? color : colors.textLight }]}>
               {route.name}
             </Text>
@@ -70,11 +87,9 @@ export const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, 
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
-    height: 70,
     backgroundColor: colors.white,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingBottom: 8,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,
@@ -86,8 +101,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: colors.tagRed,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: { color: colors.white, fontSize: 11, fontWeight: '800' },
   label: {
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 4,
     fontWeight: '600',
   },

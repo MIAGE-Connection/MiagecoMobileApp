@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, SafeAreaView, Platform, StatusBar } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, { useState, useCallback } from 'react';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, SafeAreaView, Platform, StatusBar, RefreshControl } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -8,91 +8,138 @@ import { CategoryItem } from '../components/CategoryItem';
 import { FeaturedEventCard } from '../components/FeaturedEventCard';
 import { statsService } from '../services/statsService';
 import { featuredEventService, FeaturedEvent } from '../services/featuredEventService';
-
-const FALLBACK_FEATURED_EVENT: FeaturedEvent = {
-  id: '1',
-  title: 'Congrès National MIAGE 2026',
-  description: '3 jours - 18 universités - 600 MIAGistes réunis',
-  start_date: '2026-11-21',
-  end_date: '2026-11-23',
-  location: 'MARSEILLE',
-  ticket_url: 'https://miage-congress.fr',
-  stats: '600 MIAGistes attendus',
-  is_published: true,
-};
+import { siteSettingsService, HomeStatSetting } from '../services/siteSettingsService';
+import { useAuth } from '../contexts/AuthContext';
+import { useNewCounts } from '../hooks/useNewCounts';
 
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const { user, isActiveMember } = useAuth();
+  const { counts } = useNewCounts();
+  const unreadNotifications = counts.notification_history;
   const [stats, setStats] = useState({
-    newsCount: 0,
     eventsCount: 0,
     associationsCount: 0,
   });
-  const [featuredEvent, setFeaturedEvent] = useState<FeaturedEvent | null>(FALLBACK_FEATURED_EVENT);
+  const [customStats, setCustomStats] = useState<HomeStatSetting[]>([]);
+  const [featuredEvent, setFeaturedEvent] = useState<FeaturedEvent | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  // L'onglet Accueil reste monté : on recharge à chaque retour sur l'écran
+  // pour refléter les modifications faites dans le panneau admin.
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const loadData = async () => {
     try {
-      const [news, events, associations, featured] = await Promise.all([
-        statsService.getTotalNewsCount(),
+      const [events, associations, featured, custom] = await Promise.all([
         statsService.getUpcomingEventsCount(),
         statsService.getAssociationsCount(),
         featuredEventService.getFeaturedEvent(),
+        siteSettingsService.getHomeStats(),
       ]);
       setStats({
-        newsCount: news,
         eventsCount: events,
         associationsCount: associations,
       });
-      if (featured) {
-        setFeaturedEvent(featured);
-      }
+      setCustomStats(custom);
+      setFeaturedEvent(featured);
+      setLoadError(false);
     } catch (error) {
       console.error('Error loading data:', error);
+      setLoadError(true);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.logoContainer}>
-          <View style={styles.logoPill}>
-            <Text style={styles.logoText}>mc</Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={styles.notificationButton}
-          onPress={() => navigation.navigate('Compte', { screen: 'NotificationPreferences' })}
-        >
-          <Ionicons name="notifications-outline" size={24} color={colors.text} />
-          <View style={styles.notificationDot} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView 
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadData();
+            }}
+            tintColor={colors.white}
+            colors={[colors.primary]}
+          />
+        }
       >
-        {/* Welcome Section */}
-        <View style={styles.welcomeSection}>
-          <Text style={styles.greeting}>
-            BONJOUR MIAGISTE <Text style={styles.emoji}>👋</Text>
-          </Text>
-          <Text style={styles.mainTitle}>
-            Bienvenue dans le réseau MIAGE Connection.
-          </Text>
+        {/* Bandeau fédération */}
+        <View style={styles.hero}>
+          <View style={styles.header}>
+            <View style={styles.brandRow}>
+              <View style={styles.logoPill}>
+                <Text style={styles.logoText}>mc</Text>
+              </View>
+              <Text style={styles.brandText}>MIAGE Connection</Text>
+            </View>
+            {user && isActiveMember ? (
+              <TouchableOpacity
+                style={styles.notificationButton}
+                onPress={() => navigation.navigate('NotificationInbox')}
+                accessibilityLabel="Historique des notifications"
+              >
+                <Ionicons name="notifications-outline" size={22} color={colors.white} />
+                {unreadNotifications > 0 ? (
+                  <View style={styles.bellBadge}>
+                    <Text style={styles.bellBadgeText}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          <Text style={styles.greeting}>LA FÉDÉRATION NATIONALE DES ÉTUDIANTS ET DIPLÔMÉS DE MIAGE</Text>
+          <Text style={styles.mainTitle}>Bienvenue dans le réseau MIAGE Connection.</Text>
           <Text style={styles.description}>
-            Le compagnon mobile des MIAGistes : actualités, événements, associations et ressources, au même endroit.
+            Actualités, événements, associations et ressources des MIAGistes, au même endroit.
           </Text>
         </View>
+
+        {/* Chiffres clés */}
+        <View style={styles.statsCard}>
+          {[
+            { label: 'Associations', auto: String(stats.associationsCount) },
+            { label: 'Événements', auto: String(stats.eventsCount) },
+            { label: 'MIAGistes', auto: '—' },
+          ].map((block, i) => (
+            <React.Fragment key={block.label}>
+              {i > 0 && <View style={styles.statDivider} />}
+              <View style={styles.statBlock}>
+                <Text style={styles.statValue}>{customStats[i]?.value || block.auto}</Text>
+                <Text style={styles.statLabel}>{customStats[i]?.label || block.label}</Text>
+              </View>
+            </React.Fragment>
+          ))}
+        </View>
+
+        <View style={styles.body}>
+        {loadError && (
+          <TouchableOpacity
+            style={styles.errorBanner}
+            onPress={() => {
+              setRefreshing(true);
+              loadData();
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="cloud-offline-outline" size={16} color={colors.error} style={{ marginRight: 8 }} />
+            <Text style={styles.errorBannerText}>Impossible de charger les données. Touche pour réessayer.</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Featured Card */}
         {featuredEvent && (
@@ -102,16 +149,13 @@ export const HomeScreen: React.FC = () => {
             location={featuredEvent.location || 'TBD'}
             stats={featuredEvent.stats || ''}
             ticketUrl={featuredEvent.ticket_url}
-            onPressProgram={() => {}}
+            programUrl={featuredEvent.program_url}
           />
         )}
 
         {/* Explorer Section */}
         <View style={styles.explorerHeader}>
           <Text style={styles.explorerTitle}>Explorer</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAll}>Tout voir</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.grid}>
@@ -134,7 +178,7 @@ export const HomeScreen: React.FC = () => {
             subtitle="Explorez le réseau"
             iconName="people-outline"
             iconColor={colors.iconGreen}
-            onPress={() => navigation.navigate('Hub MIAGistes', { screen: 'AssociationsDirectory' })}
+            onPress={() => navigation.navigate('Associations')}
           />
           <CategoryItem
             title="Actu Admin"
@@ -144,8 +188,9 @@ export const HomeScreen: React.FC = () => {
             onPress={() => navigation.navigate('ActuAdmin')}
           />
         </View>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -153,90 +198,125 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+  },
+  scrollContent: {
+    paddingBottom: 100, // Space for custom tab bar
+  },
+  hero: {
+    backgroundColor: colors.primary,
+    paddingTop: (Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 50) + spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: 56,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
+    marginBottom: spacing.lg,
   },
-  logoContainer: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
+  brandRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
   logoPill: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    width: 36,
-    height: 36,
+    backgroundColor: colors.white,
+    borderRadius: 10,
+    width: 38,
+    height: 38,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: spacing.sm + 2,
   },
   logoText: {
-    color: colors.white,
-    fontSize: 16,
+    color: colors.primary,
+    fontSize: 17,
     fontWeight: '900',
     letterSpacing: -1,
   },
+  brandText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
   notificationButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: colors.white,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
   },
   notificationDot: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: 10,
+    right: 11,
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.tagRed,
-    borderWidth: 2,
-    borderColor: colors.white,
-  },
-  scrollContent: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: 100, // Space for custom tab bar
-  },
-  welcomeSection: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
   },
   greeting: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-    color: colors.primary,
+    color: 'rgba(255, 255, 255, 0.7)',
     marginBottom: spacing.sm,
-    letterSpacing: 0.5,
-  },
-  emoji: {
-    fontSize: 14,
+    letterSpacing: 0.8,
+    lineHeight: 15,
   },
   mainTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '900',
-    color: colors.text,
-    lineHeight: 34,
-    marginBottom: spacing.md,
+    color: colors.white,
+    lineHeight: 32,
+    marginBottom: spacing.sm + 2,
   },
   description: {
-    fontSize: 14,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.8)',
+    lineHeight: 19,
+  },
+  statsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    marginHorizontal: spacing.xl,
+    marginTop: -32,
+    paddingVertical: spacing.md,
+    shadowColor: colors.primaryDeep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  statBlock: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: colors.primary,
+  },
+  statLabel: {
+    fontSize: 11,
     color: colors.textLight,
-    lineHeight: 20,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: colors.border,
+  },
+  body: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
   },
   explorerHeader: {
     flexDirection: 'row',
@@ -249,11 +329,31 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.text,
   },
-  viewAll: {
-    fontSize: 12,
-    color: colors.textLight,
-    fontWeight: '600',
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  bellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 0,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: colors.tagRed,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
+  bellBadgeText: { color: colors.white, fontSize: 11, fontWeight: '800' },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FBCACA',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginTop: spacing.lg,
+  },
+  errorBannerText: { flex: 1, fontSize: 12, color: colors.error, fontWeight: '600' },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

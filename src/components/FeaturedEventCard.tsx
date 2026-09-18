@@ -10,8 +10,8 @@ interface FeaturedEventCardProps {
   location: string;
   stats: string;
   ticketUrl?: string;
+  programUrl?: string;
   onPressRegister?: () => void;
-  onPressProgram?: () => void;
 }
 
 export const FeaturedEventCard: React.FC<FeaturedEventCardProps> = ({
@@ -20,8 +20,8 @@ export const FeaturedEventCard: React.FC<FeaturedEventCardProps> = ({
   location,
   stats,
   ticketUrl,
+  programUrl,
   onPressRegister,
-  onPressProgram,
 }) => {
   const handleRegisterPress = () => {
     if (ticketUrl) {
@@ -55,13 +55,15 @@ export const FeaturedEventCard: React.FC<FeaturedEventCardProps> = ({
         >
           <Text style={styles.registerButtonText}>S'inscrire</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.programButton}
-          onPress={onPressProgram}
-        >
-          <Ionicons name="document-outline" size={16} color={colors.primary} />
-          <Text style={styles.programButtonText}>Programme</Text>
-        </TouchableOpacity>
+        {programUrl ? (
+          <TouchableOpacity
+            style={styles.programButton}
+            onPress={() => Linking.openURL(programUrl).catch(() => {})}
+          >
+            <Ionicons name="document-outline" size={16} color={colors.primary} />
+            <Text style={styles.programButtonText}>Programme</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -69,10 +71,15 @@ export const FeaturedEventCard: React.FC<FeaturedEventCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.cardDark,
-    borderRadius: 16,
+    backgroundColor: colors.primaryDeep,
+    borderRadius: 20,
     padding: spacing.lg,
     marginVertical: spacing.lg,
+    shadowColor: colors.primaryDeep,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 6,
   },
   header: {
     flexDirection: 'row',
@@ -83,15 +90,18 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   tag: {
-    backgroundColor: colors.tagRed,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
   tagText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
     color: colors.white,
+    letterSpacing: 0.5,
   },
   headerContent: {
     flex: 1,
@@ -132,7 +142,7 @@ const styles = StyleSheet.create({
   registerButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.primary,
   },
   programButton: {
     flex: 1,

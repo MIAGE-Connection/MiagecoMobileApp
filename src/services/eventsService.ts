@@ -15,7 +15,7 @@ export const eventsService = {
       return data || [];
     } catch (error) {
       console.error('Error fetching upcoming events:', error);
-      return [];
+      throw error;
     }
   },
 
@@ -47,7 +47,7 @@ export const eventsService = {
       return data || [];
     } catch (error) {
       console.error('Error fetching all events:', error);
-      return [];
+      throw error;
     }
   },
 };

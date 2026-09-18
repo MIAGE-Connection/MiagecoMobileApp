@@ -8,40 +8,58 @@ import {
   Platform,
   StatusBar,
   ActivityIndicator,
-  Switch,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { useAuth } from '../contexts/AuthContext';
 import { pushNotificationService, NotificationPreferences } from '../services/pushNotificationService';
 
-const OPTIONS: { key: keyof Omit<NotificationPreferences, 'user_id'>; label: string; description: string }[] = [
+type NotificationMode = 'all' | 'partial' | 'none';
+
+const MODES: { key: NotificationMode; icon: keyof typeof Ionicons.glyphMap; label: string; description: string }[] = [
   {
-    key: 'events_reminders',
-    label: 'Rappels d’événements',
-    description: 'Avant un événement auquel tu es inscrit ou de ton association.',
+    key: 'all',
+    icon: 'notifications',
+    label: 'Toutes',
+    description: 'Tous les messages de la fédération, rappels d’événements et actualités.',
   },
   {
-    key: 'announcements',
-    label: 'Annonces',
-    description: 'Nouvelles annonces de ton association.',
+    key: 'partial',
+    icon: 'notifications-circle-outline',
+    label: 'Essentielles',
+    description: 'Uniquement les messages importants, sans rappels ni actualités.',
   },
   {
-    key: 'federation_news',
-    label: 'Actualités fédération',
-    description: 'Actualités et agenda national MIAGE Connection.',
+    key: 'none',
+    icon: 'notifications-off-outline',
+    label: 'Aucune',
+    description: 'Tu ne recevras plus aucune notification.',
   },
 ];
 
+const MODE_VALUES: Record<NotificationMode, Omit<NotificationPreferences, 'user_id'>> = {
+  all: { events_reminders: true, announcements: true, federation_news: true },
+  partial: { events_reminders: false, announcements: true, federation_news: false },
+  none: { events_reminders: false, announcements: false, federation_news: false },
+};
+
+const deriveMode = (prefs: NotificationPreferences): NotificationMode => {
+  if (prefs.events_reminders && prefs.announcements && prefs.federation_news) return 'all';
+  if (!prefs.events_reminders && !prefs.announcements && !prefs.federation_news) return 'none';
+  return 'partial';
+};
+
 export const NotificationPreferencesScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
-  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     if (!user?.id) {
@@ -65,18 +83,19 @@ export const NotificationPreferencesScreen: React.FC = () => {
     }, [load])
   );
 
-  const handleToggle = async (key: keyof Omit<NotificationPreferences, 'user_id'>, value: boolean) => {
-    if (!user?.id || !prefs) return;
-    setSavingKey(key);
-    setPrefs({ ...prefs, [key]: value });
+  const handleSelect = async (mode: NotificationMode) => {
+    if (!user?.id || !prefs || saving) return;
+    const previous = prefs;
+    setSaving(true);
+    setPrefs({ ...prefs, ...MODE_VALUES[mode] });
     try {
-      await pushNotificationService.updatePreferences(user.id, { [key]: value });
+      await pushNotificationService.updatePreferences(user.id, MODE_VALUES[mode]);
     } catch (error) {
       console.error('NotificationPreferencesScreen: update error', error);
       Alert.alert('Erreur', 'Impossible de sauvegarder ce réglage.');
-      setPrefs({ ...prefs, [key]: !value });
+      setPrefs(previous);
     } finally {
-      setSavingKey(null);
+      setSaving(false);
     }
   };
 
@@ -88,8 +107,10 @@ export const NotificationPreferencesScreen: React.FC = () => {
     );
   }
 
+  const currentMode = deriveMode(prefs);
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { paddingBottom: insets.bottom }]}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -100,20 +121,31 @@ export const NotificationPreferencesScreen: React.FC = () => {
       </View>
 
       <View style={styles.list}>
-        {OPTIONS.map((option) => (
-          <View key={option.key} style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowLabel}>{option.label}</Text>
-              <Text style={styles.rowDescription}>{option.description}</Text>
-            </View>
-            <Switch
-              value={prefs[option.key]}
-              onValueChange={(value) => handleToggle(option.key, value)}
-              disabled={savingKey === option.key}
-              trackColor={{ false: colors.border, true: colors.primary }}
-            />
-          </View>
-        ))}
+        <Text style={styles.intro}>Choisis ce que tu souhaites recevoir sur ton téléphone.</Text>
+        {MODES.map((mode) => {
+          const selected = currentMode === mode.key;
+          return (
+            <TouchableOpacity
+              key={mode.key}
+              style={[styles.row, selected && styles.rowSelected]}
+              onPress={() => handleSelect(mode.key)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.iconBox, selected && styles.iconBoxSelected]}>
+                <Ionicons name={mode.icon} size={22} color={selected ? colors.white : colors.primary} />
+              </View>
+              <View style={styles.rowText}>
+                <Text style={styles.rowLabel}>{mode.label}</Text>
+                <Text style={styles.rowDescription}>{mode.description}</Text>
+              </View>
+              <Ionicons
+                name={selected ? 'radio-button-on' : 'radio-button-off'}
+                size={22}
+                color={selected ? colors.primary : colors.border}
+              />
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </SafeAreaView>
   );
@@ -139,8 +171,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
   },
   headerTitle: {
@@ -152,14 +184,37 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     paddingTop: 0,
   },
+  intro: {
+    fontSize: 13,
+    color: colors.textLight,
+    marginBottom: spacing.lg,
+    lineHeight: 19,
+  },
   row: {
     backgroundColor: colors.white,
     borderRadius: 16,
-    padding: spacing.lg,
+    padding: spacing.md,
     marginBottom: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  rowSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  iconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.primarySoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  iconBoxSelected: {
+    backgroundColor: colors.primary,
   },
   rowText: {
     flex: 1,

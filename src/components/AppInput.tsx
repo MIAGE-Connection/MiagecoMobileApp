@@ -41,7 +41,7 @@ export const AppInput: React.FC<AppInputProps> = ({
         )}
         <TextInput
           style={styles.input}
-          placeholderTextColor="rgba(22, 17, 58, 0.4)"
+          placeholderTextColor="rgba(14, 26, 74, 0.4)"
           {...props}
         />
         {rightIcon && (
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   label: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
     color: colors.text,
     letterSpacing: 1,
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F3FE', // Background des inputs du design
+    backgroundColor: colors.primarySoft, // Background des inputs du design
     borderRadius: 16,
     height: 56,
     paddingHorizontal: spacing.md,

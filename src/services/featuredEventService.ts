@@ -8,6 +8,7 @@ export interface FeaturedEvent {
   end_date?: string;
   location?: string;
   ticket_url?: string;
+  program_url?: string;
   image_url?: string;
   stats?: string;
   is_published: boolean;
@@ -20,16 +21,15 @@ export const featuredEventService = {
         .from('featured_events')
         .select('*')
         .eq('is_published', true)
-        .single();
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      if (error) {
-        console.error('Supabase error fetching featured event:', error);
-        return null;
-      }
+      if (error) throw error;
       return data;
     } catch (error) {
       console.error('Error fetching featured event:', error);
-      return null;
+      throw error;
     }
   },
 

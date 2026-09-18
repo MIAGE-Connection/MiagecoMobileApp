@@ -50,6 +50,38 @@ export const associationService = {
     return data;
   },
 
+  // Super admin (RLS admin_full_access) : toutes les associations, publiées ou non.
+  async listForAdmin(): Promise<Pick<Association, 'id' | 'name' | 'location' | 'is_published'>[]> {
+    const { data, error } = await supabase
+      .from('associations')
+      .select('id, name, location, is_published')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async createAssociation(values: {
+    name: string;
+    location?: string;
+    email_contact?: string;
+    is_published: boolean;
+  }): Promise<Association> {
+    const { data, error } = await supabase
+      .from('associations')
+      .insert({
+        name: values.name.trim(),
+        location: values.location?.trim() || null,
+        email_contact: values.email_contact?.trim() || null,
+        is_published: values.is_published,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
   async updateAssociation(id: string, updates: Partial<Association>): Promise<Association> {
     if (!id || id === '') throw new Error('ID de l\'association manquant');
 
@@ -84,56 +116,37 @@ export const associationService = {
     return null;
   },
 
-  async uploadAssociationBanner(associationId: string, imageUri: string): Promise<string> {
+  // Envoie l'image dans le bucket « associations » et enregistre son URL publique.
+  async uploadAssociationImage(
+    associationId: string,
+    imageUri: string,
+    kind: 'banner' | 'logo'
+  ): Promise<string> {
     if (!associationId) throw new Error('ID de l\'association manquant');
 
-    let base64Data: string;
-
+    const path = `${associationId}/${kind}-${Date.now()}.jpg`;
+    let body: any;
     if (Platform.OS === 'web') {
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      base64Data = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
+      body = await (await fetch(imageUri)).blob();
     } else {
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      base64Data = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
+      const form = new FormData();
+      form.append('file', { uri: imageUri, name: `${kind}.jpg`, type: 'image/jpeg' } as any);
+      body = form;
     }
-
-    const fileName = `${associationId}/banner-${Date.now()}.jpg`;
 
     const { error: uploadError } = await supabase.storage
       .from('associations')
-      .upload(fileName, Buffer.from(base64Data, 'base64'), {
-        contentType: 'image/jpeg',
-        upsert: true,
-      });
-
+      .upload(path, body, { contentType: 'image/jpeg', upsert: true });
     if (uploadError) throw uploadError;
 
-    const { data: urlData } = supabase.storage
-      .from('associations')
-      .getPublicUrl(fileName);
+    const { data: urlData } = supabase.storage.from('associations').getPublicUrl(path);
+    const url = urlData.publicUrl;
 
-    const bannerUrl = urlData.publicUrl;
+    await this.updateAssociation(associationId, kind === 'logo' ? { logo_url: url } : { banner_url: url });
+    return url;
+  },
 
-    await this.updateAssociation(associationId, { banner_url: bannerUrl });
-
-    return bannerUrl;
-  }
+  uploadAssociationBanner(associationId: string, imageUri: string): Promise<string> {
+    return this.uploadAssociationImage(associationId, imageUri, 'banner');
+  },
 };

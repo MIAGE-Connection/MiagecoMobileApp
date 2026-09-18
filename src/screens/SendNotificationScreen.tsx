@@ -63,7 +63,7 @@ export const SendNotificationScreen: React.FC = () => {
           <View style={styles.infoBox}>
             <Ionicons name="information-circle-outline" size={16} color={colors.primary} style={{ marginRight: 8 }} />
             <Text style={styles.infoBoxText}>
-              Envoyée à tous les adhérents actifs ayant activé les notifications "annonces".
+              Envoyée à tous les adhérents actifs n'ayant pas désactivé les notifications.
             </Text>
           </View>
 
@@ -117,8 +117,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
   },
   headerTitle: {
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   infoBox: {
-    backgroundColor: '#F5F3FF',
+    backgroundColor: colors.primarySoft,
     padding: spacing.lg,
     borderRadius: 20,
     marginBottom: spacing.xl,
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
   infoBoxText: {
     flex: 1,
     fontSize: 12,
-    color: 'rgba(22, 17, 58, 0.7)',
+    color: 'rgba(14, 26, 74, 0.7)',
     lineHeight: 18,
   },
   label: {

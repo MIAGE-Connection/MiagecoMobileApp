@@ -16,10 +16,13 @@ import { Header } from '../components/Header';
 import { AppCard } from '../components/AppCard';
 import { instagramService } from '../services/instagramService';
 import { News } from '../types/news';
+import { ErrorState } from '../components/ErrorState';
+import { openUrl } from '../utils/links';
 
 export const NewsScreen: React.FC = () => {
   const [news, setNews] = useState<News[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     fetchNews();
@@ -30,16 +33,16 @@ export const NewsScreen: React.FC = () => {
     try {
       const data = await instagramService.getLatestNews();
       setNews(data);
-    } catch (error) {
-      console.error(error);
+      setError(false);
+    } catch (e) {
+      console.error(e);
+      setError(true);
     } finally {
       setLoading(false);
     }
   };
 
-  const openInstagram = (url: string) => {
-    Linking.openURL(url).catch((err) => console.error("Couldn't load page", err));
-  };
+  const openInstagram = (url: string) => openUrl(url);
 
   const renderItem = ({ item }: { item: News }) => (
     <AppCard style={styles.newsCard}>
@@ -70,6 +73,8 @@ export const NewsScreen: React.FC = () => {
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loaderText}>Chargement des actualités...</Text>
         </View>
+      ) : error && news.length === 0 ? (
+        <ErrorState onRetry={fetchNews} />
       ) : news.length > 0 ? (
         <FlatList
           data={news}

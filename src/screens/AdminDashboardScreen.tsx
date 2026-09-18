@@ -6,24 +6,65 @@ import { Ionicons } from '@expo/vector-icons';
 import { associationService, Association } from '../services/associationService';
 import { authService } from '../services/authService';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { deletionRequestsService } from '../services/deletionRequestsService';
 import { Toast } from '../components/Toast';
 import { useAuth } from '../contexts/AuthContext';
+import { useNewCounts } from '../hooks/useNewCounts';
+
+interface MenuItem {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  description?: string;
+  badge?: number;
+  onPress: () => void;
+}
+
+const MenuSection: React.FC<{ title: string; items: MenuItem[] }> = ({ title, items }) => (
+  <View style={styles.menuSection}>
+    <Text style={styles.menuSectionTitle}>{title}</Text>
+    <View style={styles.menuCard}>
+      {items.map((item, index) => (
+        <TouchableOpacity
+          key={item.label}
+          style={[styles.menuRow, index < items.length - 1 && styles.menuRowDivider]}
+          onPress={item.onPress}
+          activeOpacity={0.6}
+        >
+          <View style={styles.menuIconBox}>
+            <Ionicons name={item.icon} size={20} color={colors.primary} />
+          </View>
+          <View style={styles.menuTextBox}>
+            <Text style={styles.menuLabel}>{item.label}</Text>
+            {item.description ? <Text style={styles.menuDescription}>{item.description}</Text> : null}
+          </View>
+          {item.badge ? (
+            <View style={styles.menuBadge}>
+              <Text style={styles.menuBadgeText}>{item.badge}</Text>
+            </View>
+          ) : null}
+          <Ionicons name="chevron-forward" size={16} color={colors.border} />
+        </TouchableOpacity>
+      ))}
+    </View>
+  </View>
+);
 
 export const AdminDashboardScreen: React.FC = () => {
   const { user, signOut } = useAuth();
+  const { counts: newCounts } = useNewCounts();
+
+  const handleSignOut = () => {
+    Alert.alert('Se déconnecter', 'Veux-tu vraiment te déconnecter ?', [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Se déconnecter', style: 'destructive', onPress: signOut },
+    ]);
+  };
   const [association, setAssociation] = useState<Association | null>(null);
   const [loading, setLoading] = useState(true);
-  const [uploadingBanner, setUploadingBanner] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
+  const [pendingDeletions, setPendingDeletions] = useState(0);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
-  const [profileModalVisible, setProfileModalVisible] = useState(false);
-  const [profileForm, setProfileForm] = useState({
-    position_in_association: user?.position_in_association || '',
-    contact_email: user?.contact_email || '',
-    graduation_year: user?.graduation_year?.toString() || '',
-  });
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
 
@@ -36,6 +77,12 @@ export const AdminDashboardScreen: React.FC = () => {
       }
     }
   }, [isFocused, user?.associationId]);
+
+  useEffect(() => {
+    if (isFocused && user?.role === 'admin_national') {
+      deletionRequestsService.countPending().then(setPendingDeletions).catch(() => {});
+    }
+  }, [isFocused, user?.role]);
 
   if (!user) {
     return null;
@@ -60,53 +107,6 @@ export const AdminDashboardScreen: React.FC = () => {
     setToastVisible(true);
   };
 
-  const handleBannerUpload = async () => {
-    try {
-      setUploadingBanner(true);
-      const imageUri = await associationService.pickImage();
-
-      if (imageUri) {
-        const bannerUrl = await associationService.uploadAssociationBanner(user.associationId, imageUri);
-        if (bannerUrl && association) {
-          setAssociation({ ...association, banner_url: bannerUrl });
-          showToast('Bannière mise à jour avec succès', 'success');
-        }
-      }
-    } catch (error) {
-      console.error('Error uploading banner:', error);
-      showToast('Erreur lors du téléchargement', 'error');
-    } finally {
-      setUploadingBanner(false);
-    }
-  };
-
-  const updateProfileField = (field: string, value: string) => {
-    setProfileForm(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const handleProfileSave = async () => {
-    try {
-      setSavingProfile(true);
-      const profileData = {
-        position_in_association: profileForm.position_in_association,
-        contact_email: profileForm.contact_email,
-        graduation_year: profileForm.graduation_year ? parseInt(profileForm.graduation_year, 10) : undefined,
-      };
-
-      await authService.updateUserProfile(profileData);
-      showToast('Profil mis à jour', 'success');
-      setProfileModalVisible(false);
-    } catch (error) {
-      console.error('Error:', error);
-      showToast('Impossible de sauvegarder le profil', 'error');
-    } finally {
-      setSavingProfile(false);
-    }
-  };
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -124,50 +124,33 @@ export const AdminDashboardScreen: React.FC = () => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.headerSubtitle}>ESPACE ADMINISTRATEUR</Text>
-            <Text style={styles.headerTitle}>Bonjour {user.email.split('@')[0]} <Text style={styles.emoji}>👋</Text></Text>
+          <View style={styles.headerText}>
+            <View style={styles.roleBadge}>
+              <Ionicons name="shield-checkmark" size={11} color={colors.primary} style={{ marginRight: 4 }} />
+              <Text style={styles.roleBadgeText}>
+                {user.role === 'admin_national' ? 'SUPER ADMIN' : 'RÉFÉRENT D\'ASSO'}
+              </Text>
+            </View>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              Bonjour {(user.full_name || user.email.split('@')[0]).split(' ')[0]} <Text style={styles.emoji}>👋</Text>
+            </Text>
           </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.avatar}
-              onPress={() => setProfileModalVisible(true)}
-            >
-              <Text style={styles.avatarText}>{user.email.substring(0, 2).toUpperCase()}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerLogoutButton} onPress={signOut}>
-              <Ionicons name="log-out-outline" size={20} color={colors.error} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.avatar} onPress={() => navigation.navigate('EditProfile')}>
+            <Text style={styles.avatarText}>{user.email.substring(0, 2).toUpperCase()}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Profile Card (référent d'association uniquement) */}
         {user.role === 'admin_association' && (
         <>
         <View style={styles.profileCard}>
-          <TouchableOpacity
-            style={styles.banner}
-            onPress={handleBannerUpload}
-            disabled={uploadingBanner}
-          >
+          <View style={styles.banner}>
             {association?.banner_url ? (
               <Image source={{ uri: association.banner_url }} style={styles.bannerImage} />
             ) : (
-              <View style={styles.bannerOverlay}>
-                <Text style={styles.bannerText}>bannière asso</Text>
-              </View>
+              <View style={styles.bannerOverlay} />
             )}
-            {uploadingBanner && (
-              <View style={styles.uploadingOverlay}>
-                <ActivityIndicator color={colors.white} />
-              </View>
-            )}
-            {!uploadingBanner && (
-              <View style={styles.bannerEditIcon}>
-                <Ionicons name="camera" size={20} color={colors.white} />
-              </View>
-            )}
-          </TouchableOpacity>
+          </View>
 
           <View style={styles.cardContent}>
             <View style={styles.logoContainer}>
@@ -201,9 +184,6 @@ export const AdminDashboardScreen: React.FC = () => {
                 <Ionicons name="create-outline" size={16} color={colors.white} style={{ marginRight: 8 }} />
                 <Text style={styles.editButtonText}>Modifier la fiche d'association</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.qrButton}>
-                <Ionicons name="qr-code-outline" size={20} color={colors.primary} />
-              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -213,186 +193,203 @@ export const AdminDashboardScreen: React.FC = () => {
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{association?.members_count || 0}</Text>
             <Text style={styles.statLabel}>Adhérents</Text>
-            <View style={styles.statTagGreen}>
-              <Text style={styles.statTagTextGreen}>+0</Text>
-            </View>
           </View>
 
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{association?.mandate_events_count || 0}</Text>
-            <Text style={styles.statLabel}>Événements</Text>
-            <View style={styles.statTagBlue}>
-              <Text style={styles.statTagTextBlue}>MOIS</Text>
-            </View>
+            <Text style={styles.statLabel}>Événements du mandat</Text>
           </View>
         </View>
         </>
         )}
 
-        {/* Actions rôle */}
-        <View style={styles.roleActionsRow}>
-          <TouchableOpacity
-            style={styles.roleActionButton}
-            onPress={() => navigation.navigate('NotificationPreferences')}
-          >
-            <Ionicons name="notifications-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-            <Text style={styles.roleActionText}>Notifications</Text>
-          </TouchableOpacity>
-
-          {user.role === 'admin_association' && (
-            <TouchableOpacity
-              style={styles.roleActionButton}
-              onPress={() => navigation.navigate('Members')}
-            >
-              <Ionicons name="people-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-              <Text style={styles.roleActionText}>Mes membres</Text>
-            </TouchableOpacity>
-          )}
-
-          {user.role === 'admin_national' && (
-            <>
-              <TouchableOpacity
-                style={styles.roleActionButton}
-                onPress={() => navigation.navigate('Domains')}
-              >
-                <Ionicons name="globe-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.roleActionText}>Domaines</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.roleActionButton}
-                onPress={() => navigation.navigate('AdminAssociations')}
-              >
-                <Ionicons name="business-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.roleActionText}>Associations</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.roleActionButton}
-                onPress={() => navigation.navigate('SendNotification')}
-              >
-                <Ionicons name="megaphone-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.roleActionText}>Diffuser une notif</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-
-        {/* Info Section (référent d'association uniquement) */}
+        {/* Actions par rôle */}
         {user.role === 'admin_association' && (
-        <>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Informations publiées</Text>
-
-        </View>
-
-        <View style={styles.infoList}>
-          <TouchableOpacity style={styles.infoItem}>
-            <View style={styles.infoIconBox}>
-              <Ionicons name="mail-outline" size={18} color={colors.primary} />
-            </View>
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Email contact</Text>
-              <Text style={styles.infoValue}>{association?.email_contact || 'Non renseigné'}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.border} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.infoItem}>
-            <View style={styles.infoIconBox}>
-              <Ionicons name="globe-outline" size={18} color={colors.primary} />
-            </View>
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Site web</Text>
-              <Text style={styles.infoValue}>{association?.website_url || 'Non renseigné'}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.border} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.infoItem}>
-            <View style={styles.infoIconBox}>
-              <Ionicons name="logo-instagram" size={18} color={colors.primary} />
-            </View>
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoLabel}>Instagram</Text>
-              <Text style={styles.infoValue}>{association?.instagram_username || 'Non renseigné'}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.border} />
-          </TouchableOpacity>
-        </View>
-        </>
+          <MenuSection
+            title="Mon association"
+            items={[
+              {
+                icon: 'people-outline',
+                label: 'Mes membres',
+                description: "Adhérents rattachés à ton association",
+                onPress: () => navigation.navigate('Members'),
+              },
+              {
+                icon: 'calendar-outline',
+                label: 'Événements',
+                description: 'Ceux de ton association',
+                onPress: () => navigation.navigate('ContentManager', { type: 'events' }),
+              },
+            ]}
+          />
         )}
 
-        <TouchableOpacity
-          onPress={signOut}
-          style={styles.logoutButton}
-        >
-          <Text style={styles.logoutText}>Se déconnecter de l'espace admin</Text>
+        {user.role === 'admin_association' && (
+          <MenuSection
+            title="Espace adhérent"
+            items={[
+              {
+                icon: 'people-outline',
+                label: 'Annuaire des adhérents',
+                onPress: () => navigation.navigate('MemberDirectory'),
+              },
+              {
+                icon: 'folder-open-outline',
+                label: 'Documents adhérents',
+                badge: newCounts.member_documents,
+                description: 'Consulter les documents partagés',
+                onPress: () => navigation.navigate('MemberDocuments'),
+              },
+            ]}
+          />
+        )}
+
+        {user.role === 'admin_national' && (
+          <>
+            <MenuSection
+              title="Contenus de l'app"
+              items={[
+                {
+                  icon: 'calendar-outline',
+                  label: 'Événements à venir',
+                  description: "Créer, modifier, publier les événements",
+                  onPress: () => navigation.navigate('ContentManager', { type: 'events' }),
+                },
+                {
+                  icon: 'newspaper-outline',
+                  label: 'Actu Admin',
+                  description: "Actualités de la fédération",
+                  onPress: () => navigation.navigate('ContentManager', { type: 'admin_news' }),
+                },
+                {
+                  icon: 'star-outline',
+                  label: 'Événement à la une',
+                  description: "La grande carte de l'accueil",
+                  onPress: () => navigation.navigate('ContentManager', { type: 'featured_events' }),
+                },
+                {
+                  icon: 'document-text-outline',
+                  label: 'Documents adhérents',
+                  description: 'Documents de la fédération',
+                  onPress: () => navigation.navigate('ContentManager', { type: 'member_documents' }),
+                },
+                {
+                  icon: 'stats-chart-outline',
+                  label: "Chiffres de l'accueil",
+                  description: 'Associations, événements, MIAGistes',
+                  onPress: () => navigation.navigate('HomeStats'),
+                },
+              ]}
+            />
+            <MenuSection
+              title="Communication"
+              items={[
+                {
+                  icon: 'megaphone-outline',
+                  label: 'Diffuser une notification',
+                  description: 'Envoi immédiat à tous les adhérents',
+                  onPress: () => navigation.navigate('SendNotification'),
+                },
+                {
+                  icon: 'time-outline',
+                  label: 'Notifications programmées',
+                  description: 'Envois planifiés et récurrents',
+                  onPress: () => navigation.navigate('ScheduledNotifications'),
+                },
+                {
+                  icon: 'list-outline',
+                  label: 'Historique des envois',
+                  description: 'Notifications déjà parties',
+                  onPress: () => navigation.navigate('NotificationHistory'),
+                },
+              ]}
+            />
+            <MenuSection
+              title="Fédération"
+              items={[
+                {
+                  icon: 'globe-outline',
+                  label: 'Domaines autorisés',
+                  description: "Adresses email donnant accès à l'app",
+                  onPress: () => navigation.navigate('Domains'),
+                },
+                {
+                  icon: 'time-outline',
+                  label: 'Journal des domaines',
+                  description: 'Qui a activé ou désactivé quoi',
+                  onPress: () => navigation.navigate('DomainAuditLog'),
+                },
+                {
+                  icon: 'business-outline',
+                  label: 'Associations et référents',
+                  description: 'Nommer ou retirer un référent',
+                  onPress: () => navigation.navigate('AdminAssociations'),
+                },
+                {
+                  icon: 'person-remove-outline',
+                  label: 'Demandes de suppression',
+                  description:
+                    pendingDeletions > 0
+                      ? `${pendingDeletions} demande${pendingDeletions > 1 ? 's' : ''} en attente`
+                      : 'Droit à l’effacement (RGPD)',
+                  onPress: () => navigation.navigate('DeletionRequests'),
+                },
+              ]}
+            />
+          </>
+        )}
+
+        <MenuSection
+          title="Mon compte"
+          items={[
+            {
+              icon: 'person-circle-outline',
+              label: 'Mon profil',
+              description: 'Nom, poste, promotion, email de contact',
+              onPress: () => navigation.navigate('EditProfile'),
+            },
+            {
+              icon: 'notifications-outline',
+              label: 'Mes notifications',
+              description: 'Reçues et réglages',
+              badge: newCounts.notification_history,
+              onPress: () => navigation.navigate('NotificationInbox'),
+            },
+            {
+              icon: 'shield-checkmark-outline',
+              label: 'Mes données',
+              description: 'Export et suppression du compte',
+              onPress: () => navigation.navigate('MyData'),
+            },
+          ]}
+        />
+
+        <MenuSection
+          title="Informations légales"
+          items={[
+            {
+              icon: 'document-text-outline',
+              label: "Conditions d'utilisation",
+              onPress: () => navigation.navigate('LegalDocument', { documentKey: 'cgu' }),
+            },
+            {
+              icon: 'lock-closed-outline',
+              label: 'Politique de confidentialité',
+              onPress: () => navigation.navigate('LegalDocument', { documentKey: 'confidentialite' }),
+            },
+            {
+              icon: 'business-outline',
+              label: 'Mentions légales',
+              onPress: () => navigation.navigate('LegalDocument', { documentKey: 'mentions_legales' }),
+            },
+          ]}
+        />
+
+        <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut} activeOpacity={0.8}>
+          <Ionicons name="log-out-outline" size={18} color={colors.error} style={{ marginRight: 8 }} />
+          <Text style={styles.logoutText}>Se déconnecter</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      <Modal
-        visible={profileModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setProfileModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Mon profil</Text>
-              <TouchableOpacity onPress={() => setProfileModalVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.modalInputGroup}>
-                <Text style={styles.label}>Poste dans l'association</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex: Président"
-                  value={profileForm.position_in_association}
-                  onChangeText={(value) => updateProfileField('position_in_association', value)}
-                />
-              </View>
-
-              <View style={styles.modalInputGroup}>
-                <Text style={styles.label}>Email de contact personnel</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="contact@example.com"
-                  keyboardType="email-address"
-                  value={profileForm.contact_email}
-                  onChangeText={(value) => updateProfileField('contact_email', value)}
-                  autoCapitalize="none"
-                />
-              </View>
-
-              <View style={styles.modalInputGroup}>
-                <Text style={styles.label}>Année de promotion</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex: 2024"
-                  keyboardType="number-pad"
-                  value={profileForm.graduation_year}
-                  onChangeText={(value) => updateProfileField('graduation_year', value)}
-                />
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity
-              style={styles.modalSaveButton}
-              onPress={handleProfileSave}
-              disabled={savingProfile}
-            >
-              {savingProfile ? (
-                <ActivityIndicator color={colors.white} />
-              ) : (
-                <Text style={styles.modalSaveButtonText}>Enregistrer</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       <Toast
         message={toastMessage}
@@ -427,12 +424,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xl,
   },
-  headerSubtitle: {
-    fontSize: 10,
+  headerText: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: spacing.sm,
+  },
+  roleBadgeText: {
+    fontSize: 11,
     fontWeight: '800',
     color: colors.primary,
     letterSpacing: 0.5,
-    marginBottom: 4,
   },
   headerTitle: {
     fontSize: 24,
@@ -442,24 +452,11 @@ const styles = StyleSheet.create({
   emoji: {
     fontSize: 22,
   },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: colors.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerLogoutButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FDECEC',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -492,11 +489,11 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+    backgroundColor: 'rgba(43, 63, 191, 0.1)',
   },
   bannerText: {
     fontSize: 12,
-    color: 'rgba(79, 70, 229, 0.3)',
+    color: 'rgba(43, 63, 191, 0.3)',
     fontWeight: '600',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
@@ -572,7 +569,7 @@ const styles = StyleSheet.create({
   },
   activeText: {
     color: colors.success,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
   },
   locationRow: {
@@ -602,15 +599,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  qrButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -634,7 +622,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.textLight,
     marginBottom: 8,
   },
@@ -646,18 +634,18 @@ const styles = StyleSheet.create({
   },
   statTagTextGreen: {
     color: colors.success,
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '800',
   },
   statTagBlue: {
-    backgroundColor: '#F1F3FE',
+    backgroundColor: colors.primarySoft,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
   },
   statTagTextBlue: {
     color: colors.primary,
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '800',
   },
   statTagYellow: {
@@ -668,32 +656,74 @@ const styles = StyleSheet.create({
   },
   statTagTextYellow: {
     color: colors.highlight,
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '800',
   },
-  roleActionsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
+  menuSection: {
+    marginBottom: spacing.lg,
   },
-  roleActionButton: {
-    flex: 1,
+  menuSectionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.textLight,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
+  },
+  menuCard: {
     backgroundColor: colors.white,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 48,
-    borderRadius: 12,
+    borderRadius: 20,
+    overflow: 'hidden',
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
     elevation: 1,
   },
-  roleActionText: {
-    color: colors.primary,
-    fontSize: 13,
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  menuRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  menuIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.primarySoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  menuTextBox: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  menuBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  menuBadgeText: { color: colors.white, fontSize: 11, fontWeight: '800' },
+  menuLabel: {
+    fontSize: 14,
     fontWeight: '700',
+    color: colors.text,
+  },
+  menuDescription: {
+    fontSize: 11,
+    color: colors.textLight,
+    marginTop: 2,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -707,7 +737,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   updateText: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.textLight,
   },
   infoList: {
@@ -725,7 +755,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: '#F1F3FE',
+    backgroundColor: colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
@@ -734,7 +764,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   infoLabel: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.textLight,
     marginBottom: 2,
   },
@@ -744,13 +774,20 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   logoutButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    justifyContent: 'center',
+    marginTop: spacing.xl,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FBCACA',
+    backgroundColor: '#FEF2F2',
   },
   logoutText: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.error,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,

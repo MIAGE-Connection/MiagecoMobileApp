@@ -41,11 +41,42 @@ export const membersService = {
     return data || [];
   },
 
+  // Nomme `memberId` référent de son association et retire le rôle à l'ancien
+  // référent (une seule personne à la fois). Utilisable par le référent actuel
+  // (transfert) ou par l'admin fédération : contrôlé côté base (assign_referent).
+  async assignReferent(memberId: string): Promise<void> {
+    const { error } = await supabase.rpc('assign_referent', { p_member_id: memberId });
+    if (error) {
+      // PGRST202 : la fonction n'existe pas -> le script SQL de la phase 7 n'est pas installé.
+      if (error.code === 'PGRST202') {
+        throw new Error("La fonction assign_referent est absente de Supabase : lance le script SQL de la phase 7.");
+      }
+      throw error;
+    }
+  },
+
+  // Suspendre / réactiver un adhérent (admin fédération : garde-fous en base).
+  async setSuspended(memberId: string, suspended: boolean): Promise<void> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ is_suspended: suspended })
+      .eq('id', memberId)
+      .select('id, is_suspended');
+    if (error) throw error;
+    // Une mise à jour bloquée (RLS / garde-fou) ne renvoie pas d'erreur : on vérifie le résultat.
+    if (!data?.length || data[0].is_suspended !== suspended) {
+      throw new Error("La modification a été refusée par la base (droits insuffisants).");
+    }
+  },
+
   // 'member' <-> 'admin_association' uniquement : promouvoir/rétrograder un
   // admin_national se fait volontairement à la main en SQL (action trop
   // sensible pour un bouton).
   async setReferentRole(memberId: string, role: 'member' | 'admin_association'): Promise<void> {
-    const { error } = await supabase.from('profiles').update({ role }).eq('id', memberId);
+    const { data, error } = await supabase.from('profiles').update({ role }).eq('id', memberId).select('id, role');
     if (error) throw error;
+    if (!data?.length || data[0].role !== role) {
+      throw new Error("La modification a été refusée par la base (droits insuffisants).");
+    }
   },
 };

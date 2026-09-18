@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,36 +9,38 @@ import {
   StatusBar,
   ActivityIndicator,
   FlatList,
-  Alert,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { memberSpaceService, DirectoryMember } from '../services/memberSpaceService';
+import { useRemote } from '../hooks/useRemote';
+import { useAuth } from '../contexts/AuthContext';
+import { ErrorState } from '../components/ErrorState';
+import { DetailSheet, SheetAction, sheetStyles } from '../components/DetailSheet';
+import { openMail } from '../utils/links';
 
 export const MemberDirectoryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const [members, setMembers] = useState<DirectoryMember[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    try {
-      const data = await memberSpaceService.getDirectory();
-      setMembers(data);
-    } catch (error) {
-      console.error('MemberDirectoryScreen: load error', error);
-      Alert.alert('Erreur', "Impossible de charger l'annuaire.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load])
+  const { user } = useAuth();
+  const { data: members, loading, refreshing, error, refresh, retry } = useRemote<DirectoryMember[]>(
+    () => memberSpaceService.getDirectory(),
+    []
   );
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<DirectoryMember | null>(null);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter((m) =>
+      [m.full_name, m.position_in_association, m.graduation_year ? String(m.graduation_year) : '']
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    );
+  }, [members, query]);
 
   if (loading) {
     return (
@@ -60,17 +62,47 @@ export const MemberDirectoryScreen: React.FC = () => {
       </View>
 
       <FlatList
-        data={members}
+        data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={<Text style={styles.emptyText}>Aucun adhérent pour le moment.</Text>}
+        refreshing={refreshing}
+        onRefresh={refresh}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <View style={styles.searchBox}>
+            <Ionicons name="search-outline" size={18} color={colors.textLight} style={{ marginRight: 8 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Rechercher un adhérent…"
+              placeholderTextColor={colors.textLight}
+              value={query}
+              onChangeText={setQuery}
+              autoCorrect={false}
+            />
+          </View>
+        }
+        ListEmptyComponent={
+          error ? (
+            <ErrorState onRetry={retry} />
+          ) : (
+            <Text style={styles.emptyText}>{query ? 'Aucun résultat.' : 'Aucun adhérent pour le moment.'}</Text>
+          )
+        }
         renderItem={({ item }) => (
-          <View style={styles.memberCard}>
+          <TouchableOpacity style={styles.memberCard} onPress={() => setSelected(item)} activeOpacity={0.8}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{(item.full_name || '??').substring(0, 2).toUpperCase()}</Text>
             </View>
             <View style={styles.memberInfo}>
-              <Text style={styles.memberName}>{item.full_name || 'Adhérent'}</Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.memberName}>{item.full_name || 'Adhérent'}</Text>
+                {item.is_referent ? (
+                  <View style={styles.referentBadge}>
+                    <Text style={styles.referentBadgeText}>Référent</Text>
+                  </View>
+                ) : null}
+              </View>
+              {user?.associationName ? <Text style={styles.assoLine}>{user.associationName}</Text> : null}
               {item.position_in_association ? (
                 <Text style={styles.memberPosition}>{item.position_in_association}</Text>
               ) : null}
@@ -78,14 +110,59 @@ export const MemberDirectoryScreen: React.FC = () => {
                 <Text style={styles.memberYear}>Promo {item.graduation_year}</Text>
               ) : null}
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.border} />
+          </TouchableOpacity>
         )}
       />
+
+      <DetailSheet visible={!!selected} onClose={() => setSelected(null)}>
+        {selected && (
+          <>
+            <Text style={sheetStyles.title}>{selected.full_name || 'Adhérent'}</Text>
+            {selected.is_referent ? (
+              <View style={[styles.referentBadge, { alignSelf: 'flex-start', marginTop: 8 }]}>
+                <Text style={styles.referentBadgeText}>Référent de l'association</Text>
+              </View>
+            ) : null}
+            {user?.associationName ? <Text style={sheetStyles.meta}>{user.associationName}</Text> : null}
+            {selected.position_in_association ? (
+              <Text style={sheetStyles.meta}>{selected.position_in_association}</Text>
+            ) : null}
+            {selected.graduation_year ? <Text style={sheetStyles.meta}>Promo {selected.graduation_year}</Text> : null}
+
+            {selected.contact_email ? (
+              <>
+                <Text style={[sheetStyles.body, { fontWeight: '700' }]} selectable>
+                  {selected.contact_email}
+                </Text>
+                <SheetAction label="Écrire un email" primary onPress={() => openMail(selected.contact_email)} />
+              </>
+            ) : (
+              <Text style={sheetStyles.meta}>Cet adhérent n'a pas renseigné d'email de contact.</Text>
+            )}
+          </>
+        )}
+      </DetailSheet>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  nameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  referentBadge: { backgroundColor: colors.primarySoft, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  referentBadgeText: { fontSize: 11, fontWeight: '800', color: colors.primary },
+  assoLine: { fontSize: 12, color: colors.textLight, marginTop: 1 },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  searchInput: { flex: 1, fontSize: 14, color: colors.text, paddingVertical: spacing.md },
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -105,8 +182,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
   },
   headerTitle: {

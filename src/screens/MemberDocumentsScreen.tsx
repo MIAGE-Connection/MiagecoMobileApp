@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,43 +9,26 @@ import {
   StatusBar,
   ActivityIndicator,
   FlatList,
-  Alert,
-  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { memberSpaceService, MemberDocument } from '../services/memberSpaceService';
+import { newContentService } from '../services/newContentService';
+import { useRemote } from '../hooks/useRemote';
+import { ErrorState } from '../components/ErrorState';
+import { openUrl } from '../utils/links';
 
 export const MemberDocumentsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const [documents, setDocuments] = useState<MemberDocument[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    try {
-      const data = await memberSpaceService.getDocuments();
-      setDocuments(data);
-    } catch (error) {
-      console.error('MemberDocumentsScreen: load error', error);
-      Alert.alert('Erreur', 'Impossible de charger les documents.');
-    } finally {
-      setLoading(false);
-    }
+  const { data: documents, loading, refreshing, error, refresh, retry } = useRemote<MemberDocument[]>(async () => {
+    const data = await memberSpaceService.getDocuments();
+    newContentService.markSeen('member_documents');
+    return data;
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load])
-  );
-
-  const openDocument = (fileUrl: string) => {
-    Linking.openURL(fileUrl).catch(() => {
-      Alert.alert('Erreur', "Impossible d'ouvrir ce document.");
-    });
-  };
+  const openDocument = (fileUrl: string) => openUrl(fileUrl);
 
   if (loading) {
     return (
@@ -70,7 +53,11 @@ export const MemberDocumentsScreen: React.FC = () => {
         data={documents}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={<Text style={styles.emptyText}>Aucun document pour le moment.</Text>}
+        refreshing={refreshing}
+        onRefresh={refresh}
+        ListEmptyComponent={
+          error ? <ErrorState onRetry={retry} /> : <Text style={styles.emptyText}>Aucun document pour le moment.</Text>
+        }
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.docCard} onPress={() => openDocument(item.file_url)}>
             <View style={styles.docIconBox}>
@@ -109,8 +96,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
   },
   headerTitle: {
@@ -139,7 +126,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: '#F1F3FE',
+    backgroundColor: colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
@@ -158,7 +145,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   docCategory: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.primary,
     fontWeight: '700',
     marginTop: 4,

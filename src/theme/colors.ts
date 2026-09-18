@@ -1,24 +1,27 @@
+// Charte MIAGE Connection : bleu fédération + blanc, tons froids et sobres.
 export const colors = {
-  primary: '#4F46E5', // Indigo principal
-  ink: '#16113A', // Texte foncé
-  accent: '#FF7563', // Coral/Rouge pour les actions
-  surface: '#F5F3FF', // Fond clair
-  success: '#10B981', // Vert
-  highlight: '#F5A524', // Orange/Jaune
-  background: '#F8F9FE', // Fond gris/bleu très clair du design
+  primary: '#2B3FBF', // Bleu MIAGE Connection
+  primaryDeep: '#131E5C', // Bleu nuit (bandeaux, cartes héros)
+  primarySoft: '#E9EEFC', // Fond bleu très clair (pastilles d'icônes, encarts)
+  ink: '#0E1A4A', // Texte foncé
+  accent: '#4B6BF5', // Bleu vif pour les actions secondaires
+  surface: '#E9EEFC', // Fond clair
+  success: '#10B981', // Vert (statuts positifs uniquement)
+  highlight: '#F5A524', // Ambre (avertissements uniquement)
+  background: '#F5F7FD', // Fond général, blanc légèrement bleuté
   card: '#FFFFFF',
-  cardDark: '#2D2659', // Violet foncé de la carte Congrès
-  text: '#16113A',
-  textLight: '#6B7280',
-  border: '#E5E7EB',
+  cardDark: '#131E5C', // Bleu nuit
+  text: '#0E1A4A',
+  textLight: '#5B6B8C',
+  border: '#DCE3F5',
   error: '#EF4444',
   white: '#FFFFFF',
   black: '#000000',
-  secondary: '#8B5CF6',
-  tagRed: '#FF5757', // Tag "À VENIR"
-  buttonOrange: '#FF7A5C', // Bouton "S'inscrire"
-  iconBlue: '#A5A6F6', // Icône Actualités
-  iconRed: '#FF8484', // Icône Événements
-  iconGreen: '#7FD7B1', // Icône Associations
-  iconYellow: '#FCD34D', // Icône Ressources
+  secondary: '#3F63E8',
+  tagRed: '#FF5757', // Pastille de notification
+  buttonOrange: '#FFFFFF', // (hérité) bouton clair sur fond bleu nuit
+  iconBlue: '#3B82F6', // Icônes des catégories : nuances de bleu
+  iconRed: '#2B3FBF',
+  iconGreen: '#0EA5E9',
+  iconYellow: '#6366F1',
 };

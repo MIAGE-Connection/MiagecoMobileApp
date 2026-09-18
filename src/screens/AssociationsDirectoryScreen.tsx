@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -19,35 +19,26 @@ import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { associationService, Association } from '../services/associationService';
+import { useRemote } from '../hooks/useRemote';
+import { ErrorState } from '../components/ErrorState';
+import { DetailSheet, SheetAction, sheetStyles } from '../components/DetailSheet';
+import { openUrl, openMail, openInstagram } from '../utils/links';
 
 export const AssociationsDirectoryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const [associations, setAssociations] = useState<Association[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: associations, loading, refreshing, error, refresh, retry } = useRemote<Association[]>(
+    () => associationService.getAllAssociations(),
+    []
+  );
   const [searchText, setSearchText] = useState('');
-
-  useEffect(() => {
-    loadAssociations();
-  }, []);
-
-  const loadAssociations = async () => {
-    try {
-      setLoading(true);
-      const data = await associationService.getAllAssociations();
-      setAssociations(data);
-    } catch (error) {
-      console.error('Error loading associations:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [selected, setSelected] = useState<Association | null>(null);
 
   const filteredAssociations = associations.filter(asso =>
     asso.name.toLowerCase().includes(searchText.toLowerCase())
   );
 
   const renderAssociationCard = ({ item }: { item: Association }) => (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={() => setSelected(item)} activeOpacity={0.85}>
       <View style={styles.cardHeader}>
         {item.logo_url ? (
           <Image source={{ uri: item.logo_url }} style={styles.logo} />
@@ -90,22 +81,22 @@ export const AssociationsDirectoryScreen: React.FC = () => {
 
       <View style={styles.contactRow}>
         {item.email_contact && (
-          <TouchableOpacity style={styles.contactButton}>
+          <TouchableOpacity style={styles.contactButton} onPress={() => openMail(item.email_contact)} accessibilityLabel="Envoyer un email">
             <Ionicons name="mail-outline" size={14} color={colors.primary} />
           </TouchableOpacity>
         )}
         {item.website_url && (
-          <TouchableOpacity style={styles.contactButton}>
+          <TouchableOpacity style={styles.contactButton} onPress={() => openUrl(item.website_url)} accessibilityLabel="Ouvrir le site web">
             <Ionicons name="globe-outline" size={14} color={colors.primary} />
           </TouchableOpacity>
         )}
         {item.instagram_username && (
-          <TouchableOpacity style={styles.contactButton}>
+          <TouchableOpacity style={styles.contactButton} onPress={() => openInstagram(item.instagram_username)} accessibilityLabel="Ouvrir Instagram">
             <Ionicons name="logo-instagram" size={14} color={colors.primary} />
           </TouchableOpacity>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading) {
@@ -125,20 +116,6 @@ export const AssociationsDirectoryScreen: React.FC = () => {
         <Text style={styles.subtitle}>{filteredAssociations.length} associations</Text>
       </View>
 
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={styles.tabButtonSecondary}
-          onPress={() => navigation.navigate('HubMiagistes')}
-        >
-          <Ionicons name="person-outline" size={16} color={colors.textLight} style={styles.tabIcon} />
-          <Text style={styles.tabTextSecondary}>MIAGistes</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabButton}>
-          <Ionicons name="people-outline" size={16} color={colors.primary} style={styles.tabIcon} />
-          <Text style={styles.tabText}>Associations</Text>
-        </TouchableOpacity>
-      </View>
-
       <View style={styles.searchContainer}>
         <Ionicons name="search-outline" size={18} color={colors.textLight} style={styles.searchIcon} />
         <TextInput
@@ -156,13 +133,45 @@ export const AssociationsDirectoryScreen: React.FC = () => {
         renderItem={renderAssociationCard}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshing={refreshing}
+        onRefresh={refresh}
+        keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="search-outline" size={48} color={colors.textLight} />
-            <Text style={styles.emptyText}>Aucune association trouvée</Text>
-          </View>
+          error ? (
+            <ErrorState onRetry={retry} />
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="search-outline" size={48} color={colors.textLight} />
+              <Text style={styles.emptyText}>Aucune association trouvée</Text>
+            </View>
+          )
         }
       />
+
+      <DetailSheet visible={!!selected} onClose={() => setSelected(null)}>
+        {selected && (
+          <>
+            <Text style={sheetStyles.title}>{selected.name}</Text>
+            {selected.location || selected.city ? (
+              <Text style={sheetStyles.meta}>📍 {selected.location || selected.city}</Text>
+            ) : null}
+            {selected.description ? (
+              <Text style={sheetStyles.body} selectable>
+                {selected.description}
+              </Text>
+            ) : null}
+            {selected.address ? <Text style={sheetStyles.meta}>{selected.address}</Text> : null}
+            {selected.email_contact || selected.email ? (
+              <SheetAction label="Envoyer un email" onPress={() => openMail(selected.email_contact || selected.email)} />
+            ) : null}
+            {selected.phone ? <SheetAction label={`Appeler ${selected.phone}`} onPress={() => openUrl(`tel:${selected.phone}`)} /> : null}
+            {selected.website_url ? <SheetAction label="Site web" onPress={() => openUrl(selected.website_url)} /> : null}
+            {selected.instagram_username ? (
+              <SheetAction label="Instagram" onPress={() => openInstagram(selected.instagram_username)} />
+            ) : null}
+          </>
+        )}
+      </DetailSheet>
     </SafeAreaView>
   );
 };
@@ -335,7 +344,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.textLight,
   },
   contactRow: {

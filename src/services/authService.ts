@@ -34,6 +34,8 @@ async function mapProfileToUser(userId: string, email: string): Promise<User> {
     position_in_association: profile?.position_in_association,
     contact_email: profile?.contact_email,
     graduation_year: profile?.graduation_year,
+    full_name: profile?.full_name,
+    validUntil: profile?.valid_until,
   };
 }
 
@@ -104,7 +106,17 @@ export const authService = {
       return completeOAuthRedirect(result.url);
     }
 
-    WebBrowser.openAuthSessionAsync(data.url, oauthRedirectPrefix).catch(() => {});
+    if (Platform.OS === 'ios') {
+      // ASWebAuthenticationSession intercepte lui-même le retour : on termine ici.
+      const result = await WebBrowser.openAuthSessionAsync(data.url, oauthRedirectPrefix);
+      if (result.type !== 'success' || !('url' in result)) return null;
+      return completeOAuthRedirect(result.url);
+    }
+
+    // Android : openBrowserAsync n'a aucun état interne. openAuthSessionAsync en gardait
+    // un qui pouvait rester bloqué (« already open ») et rendre les clics suivants
+    // silencieusement sans effet. Le retour est traité par AuthContext via Linking.
+    await WebBrowser.openBrowserAsync(data.url);
     return null;
   },
 
@@ -144,7 +156,8 @@ export const authService = {
   updateUserProfile: async (updates: {
     position_in_association?: string;
     contact_email?: string;
-    graduation_year?: number;
+    graduation_year?: number | null;
+    full_name?: string | null;
   }): Promise<void> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('Utilisateur non authentifié');

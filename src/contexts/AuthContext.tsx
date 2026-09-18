@@ -1,15 +1,19 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as Linking from 'expo-linking';
+import { Alert } from 'react-native';
+import { goToAccountTab } from '../navigation/navigationRef';
 import { supabase } from '../services/supabase';
 import { authService, completeOAuthRedirect, DomainNotAllowedError } from '../services/authService';
 import { pushNotificationService } from '../services/pushNotificationService';
+import { legalService } from '../services/legalService';
 import { User } from '../types/user';
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
   isActiveMember: boolean;
+  needsCgu: boolean;
   domainNotAllowed: boolean;
   clearDomainNotAllowed: () => void;
   signInWithGoogle: () => Promise<void>;
@@ -25,13 +29,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isActiveMember, setIsActiveMember] = useState(false);
+  const [needsCgu, setNeedsCgu] = useState(false);
   const [domainNotAllowed, setDomainNotAllowed] = useState(false);
   const registeredForPushRef = useRef<string | null>(null);
 
+  // Plusieurs rechargements peuvent se chevaucher (événements d'auth, fin de
+  // connexion...) : seul le plus récent a le droit d'écrire l'état.
+  const refreshSeq = useRef(0);
+  const handledUrlRef = useRef<string | null>(null);
+
   const refresh = useCallback(async () => {
+    const seq = ++refreshSeq.current;
     const currentUser = await authService.getCurrentUser();
+    let active = false;
+    let cguPending = false;
+    if (currentUser) {
+      [active, cguPending] = await Promise.all([
+        authService.isActiveMember(),
+        legalService.needsCguAcceptance(),
+      ]);
+    }
+    if (seq !== refreshSeq.current) return;
     setUser(currentUser);
-    setIsActiveMember(currentUser ? await authService.isActiveMember() : false);
+    setIsActiveMember(active);
+    setNeedsCgu(cguPending);
   }, []);
 
   useEffect(() => {
@@ -67,14 +88,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // sans "//"), donc on compare uniquement le schéma plutôt que le préfixe
       // exact renvoyé par makeRedirectUri().
       if (Linking.parse(url).scheme?.toLowerCase() !== 'miageconnect') return;
+      // Le code de connexion est à usage unique : on ne traite jamais deux fois le même lien.
+      if (handledUrlRef.current === url) return;
+      handledUrlRef.current = url;
       try {
         await completeOAuthRedirect(url);
         await refresh();
-      } catch (err) {
+        goToAccountTab();
+      } catch (err: any) {
         if (err instanceof DomainNotAllowedError) {
           setDomainNotAllowed(true);
+          goToAccountTab();
         } else {
           console.error('AuthContext: OAuth redirect handling failed', err);
+          // Rendre l'échec visible : sans ça l'utilisateur revient simplement à l'accueil.
+          Alert.alert('Connexion impossible', err?.message || 'Une erreur est survenue pendant la connexion.');
         }
       }
     };
@@ -113,8 +141,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     await authService.logout();
+    refreshSeq.current++;
+    handledUrlRef.current = null;
     setUser(null);
     setIsActiveMember(false);
+    setNeedsCgu(false);
   };
 
   const renewMembership = async () => {
@@ -130,6 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         loading,
         isActiveMember,
+        needsCgu,
         domainNotAllowed,
         clearDomainNotAllowed,
         signInWithGoogle,

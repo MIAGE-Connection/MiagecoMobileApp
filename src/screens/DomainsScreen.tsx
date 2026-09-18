@@ -24,6 +24,7 @@ export const DomainsScreen: React.FC = () => {
   const [domains, setDomains] = useState<AllowedDomain[]>([]);
   const [associations, setAssociations] = useState<AssociationOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [newDomain, setNewDomain] = useState('');
   const [selectedAssoId, setSelectedAssoId] = useState<string | null>(null);
@@ -43,6 +44,7 @@ export const DomainsScreen: React.FC = () => {
       Alert.alert('Erreur', 'Impossible de charger les domaines.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -105,6 +107,11 @@ export const DomainsScreen: React.FC = () => {
       </View>
 
       <FlatList
+        refreshing={refreshing}
+        onRefresh={() => {
+          setRefreshing(true);
+          load();
+        }}
         data={domains}
         keyExtractor={(item) => item.domain}
         contentContainerStyle={styles.listContent}
@@ -212,8 +219,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
   },
   headerTitle: {

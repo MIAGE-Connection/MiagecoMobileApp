@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
+import { MICROSOFT_LOGIN_ENABLED } from '../config/features';
 import { useAuth } from '../contexts/AuthContext';
 import { DomainNotAllowedError } from '../services/authService';
 import { Ionicons } from '@expo/vector-icons';
@@ -61,11 +62,11 @@ export const AccountScreen: React.FC = () => {
           </View>
           <View style={styles.adminTag}>
             <Ionicons name="shield-checkmark" size={12} color={colors.white} style={{ marginRight: 4 }} />
-            <Text style={styles.adminTagText}>ESPACE ADMIN</Text>
+            <Text style={styles.adminTagText}>ESPACE ADHÉRENT</Text>
           </View>
         </View>
 
-        <Text style={styles.headerTitle}>Connecte-toi à ton espace association.</Text>
+        <Text style={styles.headerTitle}>Connecte-toi à ton espace adhérent.</Text>
         <Text style={styles.headerSubtitle}>
           Réservé aux adhérents des associations fédérées MIAGE Connection.
         </Text>
@@ -89,6 +90,7 @@ export const AccountScreen: React.FC = () => {
             )}
           </TouchableOpacity>
 
+          {MICROSOFT_LOGIN_ENABLED && (
           <TouchableOpacity
             style={[styles.oauthButton, styles.oauthButtonSpacing]}
             onPress={() => handleSignIn('azure')}
@@ -104,6 +106,7 @@ export const AccountScreen: React.FC = () => {
               </>
             )}
           </TouchableOpacity>
+          )}
 
           <View style={styles.infoBox}>
             <Ionicons name="information-circle-outline" size={16} color={colors.primary} style={{ marginRight: 8 }} />
@@ -121,6 +124,20 @@ export const AccountScreen: React.FC = () => {
               Tu n'es pas adhérent ? <Text style={styles.visitorLinkText}>Continuer en visiteur</Text>
             </Text>
           </TouchableOpacity>
+
+          <View style={styles.legalRow}>
+            <TouchableOpacity onPress={() => navigation.navigate('LegalDocument', { documentKey: 'cgu' })}>
+              <Text style={styles.legalLinkText}>CGU</Text>
+            </TouchableOpacity>
+            <Text style={styles.legalSeparator}>·</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('LegalDocument', { documentKey: 'confidentialite' })}>
+              <Text style={styles.legalLinkText}>Confidentialité</Text>
+            </TouchableOpacity>
+            <Text style={styles.legalSeparator}>·</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('LegalDocument', { documentKey: 'mentions_legales' })}>
+              <Text style={styles.legalLinkText}>Mentions légales</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </View>
@@ -168,7 +185,7 @@ const styles = StyleSheet.create({
   },
   adminTagText: {
     color: colors.white,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -215,7 +232,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   infoBox: {
-    backgroundColor: '#F5F3FF',
+    backgroundColor: colors.primarySoft,
     padding: spacing.lg,
     borderRadius: 20,
     marginTop: spacing.xl,
@@ -225,7 +242,7 @@ const styles = StyleSheet.create({
   infoBoxText: {
     flex: 1,
     fontSize: 12,
-    color: 'rgba(22, 17, 58, 0.7)',
+    color: 'rgba(14, 26, 74, 0.7)',
     lineHeight: 18,
   },
   visitorLink: {
@@ -240,5 +257,21 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
     textDecorationLine: 'underline',
+  },
+  legalRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: spacing.lg,
+  },
+  legalLinkText: {
+    fontSize: 11,
+    color: colors.textLight,
+    fontWeight: '600',
+  },
+  legalSeparator: {
+    fontSize: 11,
+    color: colors.textLight,
+    marginHorizontal: spacing.sm,
   },
 });
