@@ -1,6 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useFocusEffect } from '@react-navigation/native';
 import { View, ActivityIndicator } from 'react-native';
 import { colors } from '../theme/colors';
 
@@ -56,7 +56,14 @@ const legalScreens = (
 );
 
 const AccountStackNavigator: React.FC = () => {
-  const { user, loading, isActiveMember, needsCgu } = useAuth();
+  const { user, loading, isActiveMember, needsCgu, refresh } = useAuth();
+
+  // Chaque ouverture de l'onglet Compte relit les droits : la page affichée suit le rôle actuel.
+  useFocusEffect(
+    React.useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   if (loading) {
     return (

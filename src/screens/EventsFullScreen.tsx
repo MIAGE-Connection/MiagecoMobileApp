@@ -19,7 +19,7 @@ import { Event } from '../types/event';
 import { useRemote } from '../hooks/useRemote';
 import { ErrorState } from '../components/ErrorState';
 import { DetailSheet, SheetAction, sheetStyles } from '../components/DetailSheet';
-import { addToCalendar, formatLongDate, formatTime } from '../utils/links';
+import { addToCalendar, formatLongDate, formatTime, openUrl } from '../utils/links';
 
 const dayMonth = (iso?: string | null) => {
   if (!iso) return 'TBD';
@@ -127,6 +127,9 @@ export const EventsFullScreen: React.FC = () => {
               </Text>
             ) : null}
             <SheetAction label="Ajouter à mon calendrier" primary onPress={() => addToCalendar(selected)} />
+            {selected.instagram_url ? (
+              <SheetAction label="Voir le post Instagram" onPress={() => openUrl(selected.instagram_url)} />
+            ) : null}
           </>
         )}
       </DetailSheet>

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as Linking from 'expo-linking';
 import { Alert } from 'react-native';
 import { goToAccountTab } from '../navigation/navigationRef';
@@ -71,6 +71,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       authListener.subscription.unsubscribe();
     };
+  }, [refresh]);
+
+  // Les droits peuvent changer côté serveur (référent retiré, compte suspendu...) :
+  // on relit le profil à chaque retour dans l'app.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (status) => {
+      if (status === 'active') refresh();
+    });
+    return () => subscription.remove();
   }, [refresh]);
 
   // Sur Android, l'app peut être tuée par l'OS pendant que l'utilisateur est

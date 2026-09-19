@@ -68,7 +68,7 @@ export const MemberDocumentsScreen: React.FC = () => {
               {item.description ? <Text style={styles.docDescription}>{item.description}</Text> : null}
               {item.category ? <Text style={styles.docCategory}>{item.category}</Text> : null}
             </View>
-            <Ionicons name="download-outline" size={18} color={colors.textLight} />
+            <Ionicons name="open-outline" size={18} color={colors.textLight} />
           </TouchableOpacity>
         )}
       />

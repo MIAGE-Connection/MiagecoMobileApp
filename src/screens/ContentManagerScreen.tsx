@@ -48,6 +48,8 @@ interface ContentConfig {
   hasUpdatedAt?: boolean;
   publishable?: boolean;
   trackAuthor?: boolean;
+  // Avertissement affiché en haut du formulaire.
+  notice?: string;
   // Valeurs imposées à chaque enregistrement (non modifiables dans le formulaire).
   fixedValues?: Record<string, unknown>;
   fields: FieldDef[];
@@ -74,6 +76,8 @@ const CONFIGS: Record<ContentTable, ContentConfig> = {
     table: 'events',
     scopeColumn: 'association_id',
     fixedValues: { visibility: 'public' },
+    notice:
+      "Cet événement sera visible par tout le monde, y compris sans compte, dans la section « Événements » de la page d'accueil. N'y indique aucune information réservée aux adhérents.",
     title: 'Événements',
     emptyText: 'Aucun événement pour le moment.',
     orderColumn: 'start_date',
@@ -84,6 +88,7 @@ const CONFIGS: Record<ContentTable, ContentConfig> = {
       { key: 'location', label: 'Lieu', kind: 'text', placeholder: 'Ex: Paris' },
       { key: 'start_date', label: 'Début', kind: 'datetime', required: true },
       { key: 'end_date', label: 'Fin (optionnel)', kind: 'datetime' },
+      { key: 'instagram_url', label: 'Lien du post Instagram (optionnel)', kind: 'url', placeholder: 'https://www.instagram.com/p/...' },
       { key: 'is_published', label: 'Publié', kind: 'switch' },
     ],
     defaults: () => {
@@ -100,6 +105,7 @@ const CONFIGS: Record<ContentTable, ContentConfig> = {
   news: {
     table: 'news',
     hasUpdatedAt: false,
+    notice: "Cette actualité sera visible par tout le monde, y compris sans compte, dans l'onglet Actualités.",
     title: 'Actualités',
     emptyText: 'Aucune actualité pour le moment.',
     orderColumn: 'created_at',
@@ -505,6 +511,12 @@ export const ContentManagerScreen: React.FC = () => {
               </View>
 
               <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="handled">
+                {config.notice ? (
+                  <View style={styles.noticeBox}>
+                    <Ionicons name="globe-outline" size={18} color="#B45309" style={{ marginRight: 8, marginTop: 1 }} />
+                    <Text style={styles.noticeText}>{config.notice}</Text>
+                  </View>
+                ) : null}
                 {config.fields.map(renderField)}
 
                 {picker && (
@@ -651,6 +663,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  noticeBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF7E6',
+    borderColor: '#F5D08A',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  noticeText: { flex: 1, fontSize: 12, lineHeight: 17, color: '#92400E', fontWeight: '600' },
   modalTitle: {
     fontSize: 17,
     fontWeight: '700',

@@ -6,6 +6,7 @@ export interface Event {
   start_date?: string;
   end_date?: string;
   image_url?: string;
+  instagram_url?: string;
   association_id?: string;
   max_attendees?: number;
   is_published?: boolean;
