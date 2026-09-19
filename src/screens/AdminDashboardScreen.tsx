@@ -256,6 +256,12 @@ export const AdminDashboardScreen: React.FC = () => {
                   onPress: () => navigation.navigate('ContentManager', { type: 'events' }),
                 },
                 {
+                  icon: 'logo-instagram',
+                  label: 'Actualités',
+                  description: "Posts de l'onglet Actualités (Instagram)",
+                  onPress: () => navigation.navigate('ContentManager', { type: 'news' }),
+                },
+                {
                   icon: 'newspaper-outline',
                   label: 'Actu Admin',
                   description: "Actualités de la fédération",

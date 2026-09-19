@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
+import { AutoImage } from '../components/AutoImage';
 import { spacing } from '../theme/spacing';
 import { adminNewsService, AdminNews } from '../services/adminNewsService';
 import { useRemote } from '../hooks/useRemote';
@@ -113,7 +114,7 @@ export const ActuAdminScreen: React.FC = () => {
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
-              {selected?.image_url ? <Image source={{ uri: selected.image_url }} style={styles.detailImage} /> : null}
+              {selected?.image_url ? <AutoImage uri={selected.image_url} style={styles.detailImage} /> : null}
               {selected?.category ? (
                 <View style={[styles.categoryBadge, { alignSelf: 'flex-start' }]}>
                   <Text style={styles.categoryText}>{selected.category}</Text>
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   thumb: { width: 50, height: 50, borderRadius: 12, marginRight: spacing.lg, backgroundColor: colors.surface },
-  detailImage: { width: '100%', height: 180, borderRadius: 14, marginBottom: spacing.md, backgroundColor: colors.surface },
+  detailImage: { borderRadius: 14, marginBottom: spacing.md },
   iconContainer: {
     width: 50,
     height: 50,

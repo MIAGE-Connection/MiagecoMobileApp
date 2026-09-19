@@ -16,6 +16,7 @@ import { Header } from '../components/Header';
 import { AppCard } from '../components/AppCard';
 import { instagramService } from '../services/instagramService';
 import { News } from '../types/news';
+import { AutoImage } from '../components/AutoImage';
 import { ErrorState } from '../components/ErrorState';
 import { openUrl } from '../utils/links';
 
@@ -46,7 +47,7 @@ export const NewsScreen: React.FC = () => {
 
   const renderItem = ({ item }: { item: News }) => (
     <AppCard style={styles.newsCard}>
-      {item.imageUrl && <Image source={{ uri: item.imageUrl }} style={styles.newsImage} />}
+      {item.imageUrl ? <AutoImage uri={item.imageUrl} /> : null}
       <View style={styles.newsContent}>
         <View style={styles.newsHeader}>
           <Text style={styles.newsDate}>{item.date}</Text>
@@ -108,11 +109,6 @@ const styles = StyleSheet.create({
     padding: 0,
     overflow: 'hidden',
     marginBottom: spacing.md,
-  },
-  newsImage: {
-    width: '100%',
-    height: 200,
-    backgroundColor: colors.border,
   },
   newsContent: {
     padding: spacing.md,

@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 // Tables de contenu éditables par le super admin (RLS : admin_full_access).
-export type ContentTable = 'events' | 'admin_news' | 'featured_events' | 'member_documents';
+export type ContentTable = 'events' | 'news' | 'admin_news' | 'featured_events' | 'member_documents';
 
 export type ContentRow = Record<string, any> & { id: string };
 
