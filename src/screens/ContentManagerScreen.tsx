@@ -23,14 +23,19 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { contentAdminService, ContentRow, ContentTable } from '../services/contentAdminService';
 import { useAuth } from '../contexts/AuthContext';
+import { CityPicker } from '../components/CityPicker';
+import { eventInterestService } from '../services/eventInterestService';
+import { adminNotificationService } from '../services/adminNotificationService';
 
-type FieldKind = 'text' | 'multiline' | 'number' | 'url' | 'date' | 'datetime' | 'choice' | 'switch';
+type FieldKind = 'city' | 'text' | 'multiline' | 'number' | 'url' | 'date' | 'datetime' | 'choice' | 'switch';
 
 interface FieldDef {
   key: string;
   label: string;
   kind: FieldKind;
   required?: boolean;
+  // Champ visible et modifiable seulement par le super admin.
+  superAdminOnly?: boolean;
   placeholder?: string;
   options?: { value: string; label: string }[];
 }
@@ -50,6 +55,8 @@ interface ContentConfig {
   trackAuthor?: boolean;
   // Avertissement affiché en haut du formulaire.
   notice?: string;
+  // Case « Prévenir les adhérents » (super admin) : notification envoyée à la publication.
+  notify?: { title: string; body: (values: Record<string, any>) => string };
   // Valeurs imposées à chaque enregistrement (non modifiables dans le formulaire).
   fixedValues?: Record<string, unknown>;
   fields: FieldDef[];
@@ -85,12 +92,18 @@ const CONFIGS: Record<ContentTable, ContentConfig> = {
     fields: [
       { key: 'title', label: 'Titre', kind: 'text', required: true, placeholder: 'Ex: Soirée de rentrée nationale' },
       { key: 'description', label: 'Description', kind: 'multiline', placeholder: "Détails de l'événement..." },
-      { key: 'location', label: 'Lieu', kind: 'text', placeholder: 'Ex: Paris' },
+      { key: 'location', label: 'Ville', kind: 'city', required: true },
       { key: 'start_date', label: 'Début', kind: 'datetime', required: true },
       { key: 'end_date', label: 'Fin (optionnel)', kind: 'datetime' },
+      { key: 'ticket_url', label: "Lien de billetterie (bouton « S'inscrire »)", kind: 'url', placeholder: 'https://...' },
       { key: 'instagram_url', label: 'Lien du post Instagram (optionnel)', kind: 'url', placeholder: 'https://www.instagram.com/p/...' },
       { key: 'is_published', label: 'Publié', kind: 'switch' },
+      { key: 'reminder_enabled', label: 'Rappel automatique la veille (8 h)', kind: 'switch', superAdminOnly: true },
     ],
+    notify: {
+      title: 'Nouvel événement',
+      body: (v) => `${v.title}${v.location ? ` · ${v.location}` : ''}`,
+    },
     defaults: () => {
       const start = new Date();
       start.setDate(start.getDate() + 1);
@@ -117,6 +130,7 @@ const CONFIGS: Record<ContentTable, ContentConfig> = {
       { key: 'instagram_url', label: 'Lien du post Instagram (optionnel)', kind: 'url', placeholder: 'https://www.instagram.com/p/...' },
       { key: 'is_published', label: 'Publié', kind: 'switch' },
     ],
+    notify: { title: 'Nouvelle actualité', body: (v) => v.title },
     defaults: () => ({ is_published: true }),
     itemTitle: (row) => row.title,
     itemSubtitle: (row) => `${formatDate(row.created_at)}${row.instagram_url ? ' · Instagram' : ''}`,
@@ -136,6 +150,7 @@ const CONFIGS: Record<ContentTable, ContentConfig> = {
       { key: 'order_index', label: "Ordre d'affichage (0 = en premier)", kind: 'number' },
       { key: 'is_published', label: 'Publié', kind: 'switch' },
     ],
+    notify: { title: 'Actualité de la fédération', body: (v) => v.title },
     defaults: (rows) => ({ is_published: true, order_index: String(rows.length) }),
     itemTitle: (row) => row.title,
     itemSubtitle: (row) => `${row.category || 'Sans catégorie'} · ordre ${row.order_index ?? 0}`,
@@ -202,6 +217,11 @@ export const ContentManagerScreen: React.FC = () => {
   const [form, setForm] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
   const [picker, setPicker] = useState<{ key: string; mode: 'date' | 'time' } | null>(null);
+  const [notifyMembers, setNotifyMembers] = useState(false);
+  const [interestCounts, setInterestCounts] = useState<Record<string, number>>({});
+  const isSuperAdmin = user?.role === 'admin_national';
+  const canNotify = isSuperAdmin && Boolean(config.notify);
+  const visibleFields = config.fields.filter((field) => !field.superAdminOnly || isSuperAdmin);
 
   const load = useCallback(async () => {
     try {
@@ -212,6 +232,9 @@ export const ContentManagerScreen: React.FC = () => {
         scopeValue && config.scopeColumn ? { column: config.scopeColumn, value: scopeValue } : undefined
       );
       setRows(data);
+      if (config.table === 'events') {
+        eventInterestService.getCounts().then(setInterestCounts).catch(() => {});
+      }
     } catch (error) {
       console.error('ContentManagerScreen: load error', error);
       Alert.alert('Erreur', 'Impossible de charger les contenus.');
@@ -227,6 +250,7 @@ export const ContentManagerScreen: React.FC = () => {
   );
 
   const openCreate = () => {
+    setNotifyMembers(false);
     setEditingId(null);
     setForm(config.defaults(rows));
     setModalVisible(true);
@@ -234,10 +258,11 @@ export const ContentManagerScreen: React.FC = () => {
 
   const openEdit = (row: ContentRow) => {
     const values: Record<string, any> = {};
-    config.fields.forEach((field) => {
+    visibleFields.forEach((field) => {
       const raw = row[field.key];
       values[field.key] = field.kind === 'number' ? (raw == null ? '' : String(raw)) : raw ?? (field.kind === 'switch' ? false : '');
     });
+    setNotifyMembers(false);
     setEditingId(row.id);
     setForm(values);
     setModalVisible(true);
@@ -266,7 +291,7 @@ export const ContentManagerScreen: React.FC = () => {
 
   const handleSave = async () => {
     const payload: Record<string, unknown> = {};
-    for (const field of config.fields) {
+    for (const field of visibleFields) {
       const value = form[field.key];
       if (field.kind === 'switch') {
         payload[field.key] = Boolean(value);
@@ -294,6 +319,18 @@ export const ContentManagerScreen: React.FC = () => {
       }
       setModalVisible(false);
       load();
+      if (canNotify && notifyMembers && payload.is_published && config.notify) {
+        try {
+          const sent = await adminNotificationService.sendBroadcast(
+            config.notify.title,
+            config.notify.body(payload),
+            'federation_news'
+          );
+          Alert.alert('Enregistré', `Notification envoyée à ${sent} appareil${sent > 1 ? 's' : ''}.`);
+        } catch (notifyError: any) {
+          Alert.alert('Enregistré', `Le contenu est enregistré, mais la notification n'a pas pu partir : ${notifyError?.message || 'erreur'}`);
+        }
+      }
     } catch (error: any) {
       console.error('ContentManagerScreen: save error', error);
       Alert.alert('Erreur', error?.message || "Impossible d'enregistrer.");
@@ -336,6 +373,15 @@ export const ContentManagerScreen: React.FC = () => {
 
   const renderField = (field: FieldDef) => {
     const value = form[field.key];
+
+    if (field.kind === 'city') {
+      return (
+        <View key={field.key} style={styles.fieldGroup}>
+          <Text style={styles.label}>{field.label}{field.required ? ' *' : ''}</Text>
+          <CityPicker value={value || ''} onChange={(city) => setField(field.key, city)} />
+        </View>
+      );
+    }
 
     if (field.kind === 'switch') {
       return (
@@ -436,7 +482,7 @@ export const ContentManagerScreen: React.FC = () => {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{config.title}</Text>
-        <TouchableOpacity onPress={openCreate} style={styles.addButton}>
+        <TouchableOpacity onPress={openCreate} style={styles.addButton} accessibilityLabel="Ajouter">
           <Ionicons name="add" size={22} color={colors.white} />
         </TouchableOpacity>
       </View>
@@ -466,6 +512,9 @@ export const ContentManagerScreen: React.FC = () => {
                 </Text>
                 <Text style={styles.cardSubtitle} numberOfLines={2}>
                   {config.itemSubtitle(item)}
+                  {config.table === 'events' && interestCounts[item.id]
+                    ? ` · ${interestCounts[item.id]} intéressé${interestCounts[item.id] > 1 ? 's' : ''}`
+                    : ''}
                 </Text>
                 <View style={styles.badgeRow}>
                   {publishable && (
@@ -475,6 +524,13 @@ export const ContentManagerScreen: React.FC = () => {
                       </Text>
                     </View>
                   )}
+                  {config.table === 'events' && item.reminder_enabled ? (
+                    <View style={[styles.badge, styles.badgeOn]}>
+                      <Text style={[styles.badgeText, { color: colors.success }]}>
+                        {item.reminder_sent_at ? 'Rappel envoyé' : 'Rappel J-1'}
+                      </Text>
+                    </View>
+                  ) : null}
                   {past && (
                     <View style={[styles.badge, styles.badgeOff]}>
                       <Text style={[styles.badgeText, { color: colors.textLight }]}>Passé</Text>
@@ -517,7 +573,23 @@ export const ContentManagerScreen: React.FC = () => {
                     <Text style={styles.noticeText}>{config.notice}</Text>
                   </View>
                 ) : null}
-                {config.fields.map(renderField)}
+                {visibleFields.map(renderField)}
+
+                {canNotify ? (
+                  <View style={styles.switchRow}>
+                    <View style={{ flex: 1, paddingRight: spacing.md }}>
+                      <Text style={styles.label}>Prévenir les adhérents</Text>
+                      <Text style={styles.notifyHint}>
+                        Envoie une notification à la publication (adhérents qui ont choisi « Toutes »).
+                      </Text>
+                    </View>
+                    <Switch
+                      value={notifyMembers}
+                      onValueChange={setNotifyMembers}
+                      trackColor={{ false: colors.border, true: colors.primary }}
+                    />
+                  </View>
+                ) : null}
 
                 {picker && (
                   <DateTimePicker
@@ -663,6 +735,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  notifyHint: { fontSize: 12, color: colors.textLight, marginTop: 2 },
   noticeBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',

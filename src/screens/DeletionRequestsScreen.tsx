@@ -18,8 +18,9 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { deletionRequestsService, DeletionRequest } from '../services/deletionRequestsService';
 
-// Délai RGPD : réponse sous un mois à compter de la demande.
+// Délai RGPD : réponse sous un mois à compter de la demande ; en rouge à partir du 25e jour.
 const LEGAL_DELAY_DAYS = 30;
+const URGENT_AFTER_DAYS = 25;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const formatDate = (iso: string) =>
@@ -52,22 +53,24 @@ export const DeletionRequestsScreen: React.FC = () => {
     }, [load])
   );
 
-  const handleProcessed = (item: DeletionRequest) => {
+  // L'adhérent a contacté l'admin pour retirer sa demande : le compte est conservé.
+  const handleCancel = (item: DeletionRequest) => {
     Alert.alert(
-      'Marquer comme traitée ?',
-      "À faire une fois le compte supprimé (ou la demande refusée) côté Supabase. Cette action ne supprime pas le compte.",
+      'Annuler cette demande ?',
+      "À faire uniquement si l'adhérent te l'a demandé. Son compte est conservé. Pour supprimer le compte, fais-le dans Supabase (Authentication → Users) : la demande passera alors toute seule à « Compte supprimé ».",
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: 'Retour', style: 'cancel' },
         {
-          text: 'Marquer traitée',
+          text: 'Annuler la demande',
+          style: 'destructive',
           onPress: async () => {
             setBusyId(item.id);
             try {
-              await deletionRequestsService.markProcessed(item.id);
+              await deletionRequestsService.cancel(item.id);
               await load();
-            } catch (error) {
-              console.error('DeletionRequestsScreen: update error', error);
-              Alert.alert('Erreur', 'Impossible de mettre à jour la demande.');
+            } catch (error: any) {
+              console.error('DeletionRequestsScreen: cancel error', error);
+              Alert.alert('Erreur', error?.message || 'Impossible de mettre à jour la demande.');
             } finally {
               setBusyId(null);
             }
@@ -87,49 +90,59 @@ export const DeletionRequestsScreen: React.FC = () => {
 
   const renderItem = ({ item }: { item: DeletionRequest }) => {
     const pending = item.status === 'pending';
-    const daysLeft = LEGAL_DELAY_DAYS - Math.floor((Date.now() - new Date(item.requested_at).getTime()) / DAY_MS);
-    const urgent = pending && daysLeft <= 7;
+    const cancelled = item.status === 'cancelled';
+    const daysAgo = Math.floor((Date.now() - new Date(item.requested_at).getTime()) / DAY_MS);
+    const daysLeft = LEGAL_DELAY_DAYS - daysAgo;
+    const urgent = pending && daysAgo >= URGENT_AFTER_DAYS;
+    const badge = pending
+      ? { label: 'En attente', box: styles.badgePending, text: styles.badgeTextPending }
+      : cancelled
+        ? { label: 'Annulée', box: styles.badgeCancelled, text: styles.badgeTextCancelled }
+        : { label: 'Compte supprimé', box: styles.badgeDone, text: styles.badgeTextDone };
+    const who = item.profiles?.full_name || item.profiles?.email || 'Compte supprimé';
 
     return (
       <View style={[styles.card, pending && styles.cardPending, urgent && styles.cardUrgent]}>
         <View style={styles.cardTop}>
           <View style={styles.cardInfo}>
             <Text style={styles.name} selectable>
-              {item.profiles?.full_name || item.profiles?.email || 'Compte introuvable'}
+              {item.profiles ? who : pending ? 'Compte introuvable' : 'Compte supprimé'}
             </Text>
             {item.profiles?.full_name ? (
               <Text style={styles.email} selectable>
                 {item.profiles.email}
               </Text>
             ) : null}
-            <Text style={styles.meta}>{item.profiles?.associations?.name || 'Sans association'}</Text>
+            {item.profiles ? <Text style={styles.meta}>{item.profiles.associations?.name || 'Sans association'}</Text> : null}
           </View>
-          <View style={[styles.badge, pending ? styles.badgePending : styles.badgeDone]}>
-            <Text style={[styles.badgeText, pending ? styles.badgeTextPending : styles.badgeTextDone]}>
-              {pending ? 'En attente' : 'Traitée'}
-            </Text>
+          <View style={[styles.badge, badge.box]}>
+            <Text style={[styles.badgeText, badge.text]}>{badge.label}</Text>
           </View>
         </View>
 
-        <Text style={styles.meta}>Demandée le {formatDate(item.requested_at)}</Text>
+        <Text style={styles.meta}>
+          Demandée le {formatDate(item.requested_at)} · il y a {daysAgo} jour{daysAgo > 1 ? 's' : ''}
+        </Text>
         {pending ? (
           <Text style={[styles.delay, urgent && styles.delayUrgent]}>
-            {daysLeft > 0 ? `Délai légal : ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}` : 'Délai légal dépassé'}
+            {daysLeft > 0
+              ? `Délai légal : ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}`
+              : 'Délai légal dépassé'}
+          </Text>
+        ) : cancelled && item.cancelled_at ? (
+          <Text style={styles.meta}>
+            Annulée le {formatDate(item.cancelled_at)} {item.cancelled_by === 'member' ? "par l'adhérent" : "à sa demande (par l'admin)"}
           </Text>
         ) : item.processed_at ? (
-          <Text style={styles.meta}>Traitée le {formatDate(item.processed_at)}</Text>
+          <Text style={styles.meta}>Supprimé le {formatDate(item.processed_at)}</Text>
         ) : null}
 
         {pending && (
-          <TouchableOpacity
-            style={styles.processButton}
-            onPress={() => handleProcessed(item)}
-            disabled={busyId === item.id}
-          >
+          <TouchableOpacity style={styles.processButton} onPress={() => handleCancel(item)} disabled={busyId === item.id}>
             {busyId === item.id ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Text style={styles.processButtonText}>Marquer comme traitée</Text>
+              <Text style={styles.processButtonText}>Annuler à la demande de l'adhérent</Text>
             )}
           </TouchableOpacity>
         )}
@@ -168,7 +181,9 @@ export const DeletionRequestsScreen: React.FC = () => {
             <Ionicons name="information-circle-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
             <Text style={styles.infoText}>
               La suppression se fait dans Supabase (Authentication → Users). Une fois le compte supprimé, la demande
-              disparaît de cette liste.
+              passe toute seule à « Compte supprimé » et reste ici comme trace, sans aucune donnée personnelle. Si
+              l'adhérent veut finalement garder son compte, il peut annuler lui-même sa demande dans l'app ; tu peux
+              aussi l'annuler ici s'il te le demande.
             </Text>
           </View>
         }
@@ -288,6 +303,9 @@ const styles = StyleSheet.create({
   badgeDone: {
     backgroundColor: '#E7F6EC',
   },
+  badgeCancelled: {
+    backgroundColor: '#EEF0F4',
+  },
   badgeText: {
     fontSize: 11,
     fontWeight: '700',
@@ -297,6 +315,9 @@ const styles = StyleSheet.create({
   },
   badgeTextDone: {
     color: '#1E7B3F',
+  },
+  badgeTextCancelled: {
+    color: colors.textLight,
   },
   processButton: {
     marginTop: spacing.md,

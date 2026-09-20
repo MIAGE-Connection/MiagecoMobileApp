@@ -25,6 +25,14 @@ async function mapProfileToUser(userId: string, email: string): Promise<User> {
     .eq('id', userId)
     .single();
 
+  // Poste choisi dans la liste : requête à part et tolérante, pour ne jamais gêner la connexion
+  // (colonne/table absentes tant que le script SQL de la phase 16 n'est pas lancé).
+  let position: { label: string; color: string } | null = null;
+  if (profile?.position_id) {
+    const { data } = await supabase.from('member_positions').select('label, color').eq('id', profile.position_id).maybeSingle();
+    position = data;
+  }
+
   return {
     id: userId,
     email,
@@ -32,6 +40,9 @@ async function mapProfileToUser(userId: string, email: string): Promise<User> {
     associationId: profile?.association_id || '',
     role: profile?.role || 'member',
     position_in_association: profile?.position_in_association,
+    position_id: profile?.position_id ?? null,
+    position_label: position?.label ?? null,
+    position_color: position?.color ?? null,
     contact_email: profile?.contact_email,
     graduation_year: profile?.graduation_year,
     full_name: profile?.full_name,
@@ -48,9 +59,11 @@ export async function completeOAuthRedirect(url: string): Promise<User> {
   const callbackUrl = new URL(url);
   const code = callbackUrl.searchParams.get('code');
   const hashParams = new URLSearchParams(callbackUrl.hash.replace(/^#/, ''));
+  if (__DEV__) console.log('[auth] retour OAuth reçu', { hasCode: !!code, hasToken: !!hashParams.get('access_token') });
 
   if (code) {
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+    if (__DEV__) console.log('[auth] échange du code', exchangeError ? `ÉCHEC : ${exchangeError.message}` : 'ok');
     if (exchangeError) throw exchangeError;
   } else if (hashParams.get('access_token')) {
     const { error: setError } = await supabase.auth.setSession({
@@ -69,6 +82,7 @@ export async function completeOAuthRedirect(url: string): Promise<User> {
 
   // Rattache/crée le profil via le domaine autorisé et pose valid_until.
   const { error: ensureError } = await supabase.rpc('ensure_my_profile');
+  if (__DEV__) console.log('[auth] ensure_my_profile', ensureError ? `ÉCHEC : ${ensureError.message}` : 'ok');
   if (ensureError) {
     await supabase.auth.signOut();
     throw new DomainNotAllowedError();
@@ -86,12 +100,14 @@ export const authService = {
   // Natif (Android/iOS) : on ouvre juste le navigateur système et on rend la
   // main. Le retour est intercepté globalement par AuthContext via Linking,
   // ce qui fonctionne même si Android tue le process pendant l'auth.
-  async signInWithProvider(provider: 'google' | 'azure'): Promise<User | null> {
+  async signInWithProvider(provider: 'google' | 'azure', loginHint?: string): Promise<User | null> {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: oauthRedirectPrefix,
         skipBrowserRedirect: true,
+        // Présélectionne le compte Google correspondant à l'adresse saisie.
+        queryParams: loginHint ? { login_hint: loginHint } : undefined,
       },
     });
 
@@ -116,8 +132,20 @@ export const authService = {
     // Android : openBrowserAsync n'a aucun état interne. openAuthSessionAsync en gardait
     // un qui pouvait rester bloqué (« already open ») et rendre les clics suivants
     // silencieusement sans effet. Le retour est traité par AuthContext via Linking.
-    await WebBrowser.openBrowserAsync(data.url);
+    if (__DEV__) console.log('[auth] ouverture du navigateur Google');
+    // createTask:false → l'onglet Google reste dans la tâche de l'app : au retour du lien,
+    // Android ramène l'app existante au lieu de la relancer (ce qui perdait le lien de connexion).
+    const opened = await WebBrowser.openBrowserAsync(data.url, { createTask: false });
+    if (__DEV__) console.log('[auth] navigateur refermé/rendu la main :', opened.type);
     return null;
+  },
+
+  // Contrôle du domaine AVANT d'ouvrir Google : un domaine refusé ne voit jamais
+  // l'écran d'autorisation et ne partage donc aucune information.
+  isEmailDomainAllowed: async (email: string): Promise<boolean> => {
+    const { data, error } = await supabase.rpc('is_email_domain_allowed', { p_email: email });
+    if (error) throw error;
+    return Boolean(data);
   },
 
   logout: async (): Promise<void> => {
@@ -154,7 +182,7 @@ export const authService = {
   },
 
   updateUserProfile: async (updates: {
-    position_in_association?: string;
+    position_id?: string | null;
     contact_email?: string;
     graduation_year?: number | null;
     full_name?: string | null;

@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useNavigation } from '@react-navigation/native';
 import {
   StyleSheet,
   Text,
@@ -19,29 +20,15 @@ import { News } from '../types/news';
 import { AutoImage } from '../components/AutoImage';
 import { ErrorState } from '../components/ErrorState';
 import { openUrl } from '../utils/links';
+import { useRemote } from '../hooks/useRemote';
 
 export const NewsScreen: React.FC = () => {
-  const [news, setNews] = useState<News[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    fetchNews();
-  }, []);
-
-  const fetchNews = async () => {
-    setLoading(true);
-    try {
-      const data = await instagramService.getLatestNews();
-      setNews(data);
-      setError(false);
-    } catch (e) {
-      console.error(e);
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const navigation = useNavigation<any>();
+  // Rechargé à chaque ouverture de l'écran : une actualité masquée ou ajoutée dans l'admin est prise en compte.
+  const { data: news, loading, refreshing, error, refresh, retry } = useRemote<News[]>(
+    () => instagramService.getLatestNews(),
+    []
+  );
 
   const openInstagram = (url: string) => openUrl(url);
 
@@ -68,14 +55,14 @@ export const NewsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <Header title="Actualités" subtitle="Suivez nos dernières publications" />
+      <Header title="Actualités" subtitle="Suivez nos dernières publications" onBack={() => navigation.goBack()} />
       {loading ? (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loaderText}>Chargement des actualités...</Text>
         </View>
       ) : error && news.length === 0 ? (
-        <ErrorState onRetry={fetchNews} />
+        <ErrorState onRetry={retry} />
       ) : news.length > 0 ? (
         <FlatList
           data={news}
@@ -83,8 +70,8 @@ export const NewsScreen: React.FC = () => {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          onRefresh={fetchNews}
-          refreshing={loading}
+          onRefresh={refresh}
+          refreshing={refreshing}
         />
       ) : (
         <View style={styles.emptyContainer}>

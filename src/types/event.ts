@@ -7,6 +7,7 @@ export interface Event {
   end_date?: string;
   image_url?: string;
   instagram_url?: string;
+  ticket_url?: string;
   association_id?: string;
   max_attendees?: number;
   is_published?: boolean;

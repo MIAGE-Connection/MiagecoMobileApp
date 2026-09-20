@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
+import { CityPicker } from '../components/CityPicker';
 import { associationService, Association } from '../services/associationService';
 import { membersService, ReferentInfo } from '../services/membersService';
 
@@ -168,6 +169,14 @@ export const AdminAssociationsScreen: React.FC = () => {
                   </Text>
                 </View>
               </View>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => navigation.navigate('EditAssociation', { associationId: item.id })}
+                accessibilityLabel={`Modifier ${item.name}`}
+                hitSlop={8}
+              >
+                <Ionicons name="create-outline" size={20} color={colors.primary} />
+              </TouchableOpacity>
               <Ionicons name="chevron-forward" size={18} color={colors.border} />
             </TouchableOpacity>
           );
@@ -192,15 +201,9 @@ export const AdminAssociationsScreen: React.FC = () => {
             />
 
             <Text style={styles.label}>Ville</Text>
-            <TextInput
-              style={styles.input}
-              value={location}
-              onChangeText={setLocation}
-              placeholder="Ex : Lyon"
-              placeholderTextColor={colors.textLight}
-            />
+            <CityPicker value={location} onChange={setLocation} placeholder="Choisir une ville" />
 
-            <Text style={styles.label}>Email de contact</Text>
+            <Text style={[styles.label, { marginTop: spacing.md }]}>Email de contact</Text>
             <TextInput
               style={styles.input}
               value={email}
@@ -294,6 +297,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  editButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
   },
   cardInfo: {
     flex: 1,

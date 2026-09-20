@@ -17,14 +17,13 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { memberSpaceService, DirectoryMember } from '../services/memberSpaceService';
 import { useRemote } from '../hooks/useRemote';
-import { useAuth } from '../contexts/AuthContext';
 import { ErrorState } from '../components/ErrorState';
 import { DetailSheet, SheetAction, sheetStyles } from '../components/DetailSheet';
 import { openMail } from '../utils/links';
+import { PositionBadge } from '../components/PositionBadge';
 
 export const MemberDirectoryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const { user } = useAuth();
   const { data: members, loading, refreshing, error, refresh, retry } = useRemote<DirectoryMember[]>(
     () => memberSpaceService.getDirectory(),
     []
@@ -36,7 +35,7 @@ export const MemberDirectoryScreen: React.FC = () => {
     const q = query.trim().toLowerCase();
     if (!q) return members;
     return members.filter((m) =>
-      [m.full_name, m.position_in_association, m.graduation_year ? String(m.graduation_year) : '']
+      [m.full_name, m.position_in_association, m.association_name, m.graduation_year ? String(m.graduation_year) : '']
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q))
     );
@@ -102,9 +101,9 @@ export const MemberDirectoryScreen: React.FC = () => {
                   </View>
                 ) : null}
               </View>
-              {user?.associationName ? <Text style={styles.assoLine}>{user.associationName}</Text> : null}
+              {item.association_name ? <Text style={styles.assoLine}>{item.association_name}</Text> : null}
               {item.position_in_association ? (
-                <Text style={styles.memberPosition}>{item.position_in_association}</Text>
+                <PositionBadge label={item.position_in_association} color={item.position_color} />
               ) : null}
               {item.graduation_year ? (
                 <Text style={styles.memberYear}>Promo {item.graduation_year}</Text>
@@ -124,9 +123,9 @@ export const MemberDirectoryScreen: React.FC = () => {
                 <Text style={styles.referentBadgeText}>Référent de l'association</Text>
               </View>
             ) : null}
-            {user?.associationName ? <Text style={sheetStyles.meta}>{user.associationName}</Text> : null}
+            {selected.association_name ? <Text style={sheetStyles.meta}>{selected.association_name}</Text> : null}
             {selected.position_in_association ? (
-              <Text style={sheetStyles.meta}>{selected.position_in_association}</Text>
+              <PositionBadge label={selected.position_in_association} color={selected.position_color} style={{ marginTop: 8 }} />
             ) : null}
             {selected.graduation_year ? <Text style={sheetStyles.meta}>Promo {selected.graduation_year}</Text> : null}
 
@@ -229,12 +228,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.text,
-  },
-  memberPosition: {
-    fontSize: 11,
-    color: colors.primary,
-    marginTop: 2,
-    fontWeight: '600',
   },
   memberYear: {
     fontSize: 11,

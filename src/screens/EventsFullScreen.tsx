@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,9 +9,12 @@ import {
   Platform,
   StatusBar,
   ActivityIndicator,
+  TextInput,
+  ScrollView,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { eventsService } from '../services/eventsService';
@@ -20,6 +23,9 @@ import { useRemote } from '../hooks/useRemote';
 import { ErrorState } from '../components/ErrorState';
 import { DetailSheet, SheetAction, sheetStyles } from '../components/DetailSheet';
 import { addToCalendar, formatLongDate, formatTime, openUrl } from '../utils/links';
+import { useAuth } from '../contexts/AuthContext';
+import { eventInterestService } from '../services/eventInterestService';
+import { normalizeText } from '../data/frenchCities';
 
 const dayMonth = (iso?: string | null) => {
   if (!iso) return 'TBD';
@@ -36,6 +42,48 @@ export const EventsFullScreen: React.FC = () => {
     []
   );
   const [selected, setSelected] = useState<Event | null>(null);
+  const [search, setSearch] = useState('');
+  const [cityFilter, setCityFilter] = useState<string | null>(null);
+  const { user, isActiveMember } = useAuth();
+  const [interestedIds, setInterestedIds] = useState<Set<string>>(new Set());
+
+  // « Intéressé » : mémorisé par compte, rechargé à chaque ouverture de l'écran.
+  useFocusEffect(
+    useCallback(() => {
+      if (user && isActiveMember) {
+        eventInterestService.getMyInterestIds().then(setInterestedIds).catch(() => {});
+      } else {
+        setInterestedIds(new Set());
+      }
+    }, [user, isActiveMember])
+  );
+
+  const toggleInterested = async (event: Event) => {
+    if (!user || !isActiveMember) {
+      Alert.alert('Connexion requise', "Connecte-toi à ton espace adhérent pour indiquer que l'événement t'intéresse.", [
+        { text: 'Plus tard', style: 'cancel' },
+        {
+          text: 'Se connecter',
+          onPress: () => {
+            setSelected(null);
+            navigation.navigate('Compte');
+          },
+        },
+      ]);
+      return;
+    }
+    const wasInterested = interestedIds.has(event.id);
+    const next = new Set(interestedIds);
+    if (wasInterested) next.delete(event.id);
+    else next.add(event.id);
+    setInterestedIds(next);
+    try {
+      await eventInterestService.setInterested(event.id, user.id, !wasInterested);
+    } catch {
+      setInterestedIds(interestedIds);
+      Alert.alert('Erreur', "Impossible d'enregistrer ton choix. Réessaie.");
+    }
+  };
 
   // À venir d'abord (le plus proche en premier), puis les événements passés.
   const events = useMemo(() => {
@@ -44,6 +92,21 @@ export const EventsFullScreen: React.FC = () => {
     const past = data.filter((e) => new Date(e.start_date ?? 0).getTime() < now).reverse();
     return [...upcoming, ...past];
   }, [data]);
+
+  // Villes présentes dans les événements (pastilles de filtre).
+  const cities = useMemo(
+    () => Array.from(new Set(data.map((e) => e.location).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'fr')),
+    [data]
+  );
+
+  const filteredEvents = useMemo(() => {
+    const q = normalizeText(search);
+    return events.filter((e) => {
+      if (cityFilter && e.location !== cityFilter) return false;
+      if (!q) return true;
+      return normalizeText(`${e.title} ${e.location ?? ''}`).includes(q);
+    });
+  }, [events, search, cityFilter]);
 
   const renderEventCard = ({ item }: { item: Event }) => {
     const past = new Date(item.start_date ?? 0).getTime() < Date.now();
@@ -88,6 +151,35 @@ export const EventsFullScreen: React.FC = () => {
         <View style={styles.spacer} />
       </View>
 
+      {!loading && data.length > 0 ? (
+        <View>
+          <View style={styles.searchBox}>
+            <Ionicons name="search-outline" size={18} color={colors.textLight} style={{ marginRight: 8 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Rechercher un événement ou une ville..."
+              placeholderTextColor={colors.textLight}
+              value={search}
+              onChangeText={setSearch}
+              autoCorrect={false}
+            />
+          </View>
+          {cities.length > 1 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>
+              {[null, ...cities].map((city) => (
+                <TouchableOpacity
+                  key={city ?? 'all'}
+                  style={[styles.chip, cityFilter === city && styles.chipActive]}
+                  onPress={() => setCityFilter(city)}
+                >
+                  <Text style={[styles.chipText, cityFilter === city && styles.chipTextActive]}>{city ?? 'Toutes'}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : null}
+        </View>
+      ) : null}
+
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -96,7 +188,7 @@ export const EventsFullScreen: React.FC = () => {
         <ErrorState onRetry={retry} />
       ) : (
         <FlatList
-          data={events}
+          data={filteredEvents}
           keyExtractor={(item) => item.id}
           renderItem={renderEventCard}
           contentContainerStyle={styles.listContent}
@@ -106,7 +198,9 @@ export const EventsFullScreen: React.FC = () => {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="calendar-outline" size={48} color={colors.textLight} />
-              <Text style={styles.emptyText}>Aucun événement pour le moment</Text>
+              <Text style={styles.emptyText}>
+                {data.length > 0 ? 'Aucun événement ne correspond à ta recherche' : 'Aucun événement pour le moment'}
+              </Text>
             </View>
           }
         />
@@ -126,7 +220,17 @@ export const EventsFullScreen: React.FC = () => {
                 {selected.description}
               </Text>
             ) : null}
-            <SheetAction label="Ajouter à mon calendrier" primary onPress={() => addToCalendar(selected)} />
+            {selected.ticket_url && new Date(selected.start_date ?? 0).getTime() >= Date.now() ? (
+              <SheetAction label="S'inscrire" primary onPress={() => openUrl(selected.ticket_url)} />
+            ) : null}
+            {new Date(selected.start_date ?? 0).getTime() >= Date.now() ? (
+              <SheetAction
+                label={interestedIds.has(selected.id) ? '★ Intéressé(e) · appuie pour annuler' : '☆ Ça m’intéresse'}
+                active={interestedIds.has(selected.id)}
+                onPress={() => toggleInterested(selected)}
+              />
+            ) : null}
+            <SheetAction label="Ajouter à mon calendrier" onPress={() => addToCalendar(selected)} />
             {selected.instagram_url ? (
               <SheetAction label="Voir le post Instagram" onPress={() => openUrl(selected.instagram_url)} />
             ) : null}
@@ -184,6 +288,31 @@ const styles = StyleSheet.create({
   locationText: { fontSize: 12, color: colors.textLight },
   pastTag: { fontSize: 11, color: colors.textLight, fontWeight: '700', marginLeft: 6 },
   description: { fontSize: 13, color: colors.textLight, lineHeight: 18, marginTop: spacing.md },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
+  },
+  searchInput: { flex: 1, height: 44, fontSize: 14, color: colors.text },
+  // Marge explicite hors du contenu défilant : le paddingVertical seul laissait les tuiles collées à la barre.
+  chipsScroll: { flexGrow: 0, marginTop: spacing.md, marginBottom: spacing.sm },
+  chips: { paddingHorizontal: spacing.xl, gap: 8, alignItems: 'center' },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { fontSize: 12, fontWeight: '700', color: colors.text },
+  chipTextActive: { color: colors.white },
   emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxl },
   emptyText: { fontSize: 14, color: colors.textLight, marginTop: spacing.md },
 });

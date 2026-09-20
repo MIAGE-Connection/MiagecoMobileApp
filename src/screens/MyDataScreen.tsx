@@ -81,7 +81,7 @@ export const MyDataScreen: React.FC = () => {
             <View style={styles.jsonBox}>
               <Text style={styles.jsonText}>{JSON.stringify(data, null, 2)}</Text>
             </View>
-            <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleShare} accessibilityLabel="Partager mes données">
               <Ionicons name="share-outline" size={16} color={colors.white} style={{ marginRight: 8 }} />
               <Text style={styles.actionButtonText}>Partager / enregistrer</Text>
             </TouchableOpacity>

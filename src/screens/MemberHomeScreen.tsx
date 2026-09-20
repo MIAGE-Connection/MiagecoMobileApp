@@ -107,7 +107,7 @@ export const MemberHomeScreen: React.FC = () => {
             ))}
           </View>
 
-          <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut} activeOpacity={0.8} accessibilityLabel="Se déconnecter">
             <Ionicons name="log-out-outline" size={18} color={colors.error} style={{ marginRight: 8 }} />
             <Text style={styles.logoutText}>Se déconnecter</Text>
           </TouchableOpacity>

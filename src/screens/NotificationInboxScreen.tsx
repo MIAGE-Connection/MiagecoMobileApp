@@ -29,8 +29,10 @@ interface InboxRow {
 
 interface InboxData {
   rows: InboxRow[];
-  // Date de la dernière ouverture : ce qui est plus récent est « non lu ».
+  // Repère de départ : ce qui est plus récent est « non lu »...
   since: string | null;
+  // ... sauf ce que l'adhérent a déjà touché.
+  readIds: string[];
 }
 
 const formatDateTime = (iso: string) =>
@@ -48,7 +50,7 @@ export const NotificationInboxScreen: React.FC = () => {
   const [showAll, setShowAll] = useState(route.params?.all === true);
   const sinceRef = useRef<string | null | undefined>(undefined);
 
-  const { data, loading, refreshing, error, refresh, retry } = useRemote<InboxData>(
+  const { data, setData, loading, refreshing, error, refresh, retry } = useRemote<InboxData>(
     async () => {
       if (sinceRef.current === undefined) {
         sinceRef.current = await newContentService.getLastSeen('notification_history');
@@ -59,17 +61,24 @@ export const NotificationInboxScreen: React.FC = () => {
         .order('created_at', { ascending: false })
         .limit(50);
       if (fetchError) throw fetchError;
-      // L'ouverture de l'écran marque tout comme lu (le compteur retombe à 0)
-      // mais la liste « Non lues » reste affichée pendant cette visite.
-      newContentService.markSeen('notification_history');
-      return { rows: rows || [], since: sinceRef.current ?? null };
+      const readIds = [...(await newContentService.getReadIds('notification_history'))];
+      return { rows: rows || [], since: sinceRef.current ?? null, readIds };
     },
-    { rows: [], since: null }
+    { rows: [], since: null, readIds: [] }
   );
 
-  const isUnread = (row: InboxRow) => Boolean(data.since) && new Date(row.created_at) > new Date(data.since as string);
-  const unreadRows = useMemo(() => data.rows.filter(isUnread), [data]);
+  const readSet = useMemo(() => new Set(data.readIds), [data.readIds]);
+  const isUnread = (row: InboxRow) =>
+    Boolean(data.since) && new Date(row.created_at) > new Date(data.since as string) && !readSet.has(row.id);
+  const unreadRows = useMemo(() => data.rows.filter(isUnread), [data, readSet]);
   const visible = showAll ? data.rows : unreadRows;
+
+  // Toucher une notification la marque comme lue (elle quitte « Non lues », le compteur baisse).
+  const markRead = (ids: string[]) => {
+    if (ids.length === 0) return;
+    newContentService.markRead('notification_history', ids);
+    setData((current) => ({ ...current, readIds: [...current.readIds, ...ids] }));
+  };
 
   if (loading) {
     return (
@@ -107,6 +116,13 @@ export const NotificationInboxScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      {!showAll && unreadRows.length > 1 ? (
+        <TouchableOpacity style={styles.markAll} onPress={() => markRead(unreadRows.map((row) => row.id))}>
+          <Ionicons name="checkmark-done-outline" size={16} color={colors.primary} />
+          <Text style={styles.markAllText}>Tout marquer comme lu</Text>
+        </TouchableOpacity>
+      ) : null}
+
       <FlatList
         data={visible}
         keyExtractor={(item) => item.id}
@@ -137,7 +153,12 @@ export const NotificationInboxScreen: React.FC = () => {
         renderItem={({ item }) => {
           const unread = isUnread(item);
           return (
-            <View style={[styles.card, unread && styles.cardUnread]}>
+            <TouchableOpacity
+              style={[styles.card, unread && styles.cardUnread]}
+              activeOpacity={unread ? 0.7 : 1}
+              onPress={() => (unread ? markRead([item.id]) : undefined)}
+              accessibilityHint={unread ? 'Toucher pour marquer comme lue' : undefined}
+            >
               <View style={styles.iconBox}>
                 <Ionicons name="notifications-outline" size={18} color={colors.primary} />
               </View>
@@ -149,7 +170,7 @@ export const NotificationInboxScreen: React.FC = () => {
                 <Text style={styles.body}>{item.body}</Text>
                 <Text style={styles.date}>{formatDateTime(item.created_at)}</Text>
               </View>
-            </View>
+            </TouchableOpacity>
           );
         }}
       />
@@ -171,6 +192,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
   },
+  markAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 6,
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
+    paddingVertical: 4,
+  },
+  markAllText: { fontSize: 13, fontWeight: '700', color: colors.primary },
   iconButton: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
   tabs: {

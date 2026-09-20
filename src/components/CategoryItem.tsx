@@ -10,6 +10,8 @@ interface CategoryItemProps {
   iconName: any;
   iconColor: string;
   onPress?: () => void;
+  // Tuile pleine largeur (pour une dernière tuile seule sur sa ligne).
+  wide?: boolean;
 }
 
 export const CategoryItem: React.FC<CategoryItemProps> = ({
@@ -18,9 +20,10 @@ export const CategoryItem: React.FC<CategoryItemProps> = ({
   iconName,
   iconColor,
   onPress,
+  wide,
 }) => {
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity style={[styles.card, wide && styles.cardWide]} onPress={onPress} activeOpacity={0.7}>
       <View style={[styles.iconContainer, { backgroundColor: iconColor + '15' }]}>
         <Ionicons name={iconName} size={24} color={iconColor} />
       </View>
@@ -43,6 +46,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  cardWide: { width: '100%' },
   iconContainer: {
     width: 44,
     height: 44,

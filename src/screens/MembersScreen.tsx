@@ -17,7 +17,8 @@ import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/nativ
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { useAuth } from '../contexts/AuthContext';
-import { membersService, Member } from '../services/membersService';
+import { membersService, positionOf, Member } from '../services/membersService';
+import { PositionBadge } from '../components/PositionBadge';
 import { domainsService } from '../services/domainsService';
 
 const ROLE_LABELS: Record<Member['role'], string> = {
@@ -171,7 +172,7 @@ export const MembersScreen: React.FC = () => {
     const q = query.trim().toLowerCase();
     if (!q) return members;
     return members.filter((m) =>
-      [m.full_name, m.email, m.position_in_association].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+      [m.full_name, m.email, positionOf(m)?.label].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
     );
   }, [members, query]);
 
@@ -242,8 +243,8 @@ export const MembersScreen: React.FC = () => {
               <View style={styles.memberInfo}>
                 <Text style={styles.memberName}>{item.full_name || item.email}</Text>
                 <Text style={styles.memberEmail}>{item.email}</Text>
-                {item.position_in_association ? (
-                  <Text style={styles.memberPosition}>{item.position_in_association}</Text>
+                {positionOf(item) ? (
+                  <PositionBadge label={positionOf(item)!.label} color={positionOf(item)!.color} />
                 ) : null}
               </View>
               <View style={styles.badges}>
@@ -397,12 +398,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textLight,
     marginTop: 2,
-  },
-  memberPosition: {
-    fontSize: 11,
-    color: colors.primary,
-    marginTop: 2,
-    fontWeight: '600',
   },
   badges: {
     alignItems: 'flex-end',

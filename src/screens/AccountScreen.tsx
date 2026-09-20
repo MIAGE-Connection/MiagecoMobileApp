@@ -8,17 +8,23 @@ import {
   StatusBar,
   ActivityIndicator,
   Platform,
+  TextInput,
+  ScrollView,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { MICROSOFT_LOGIN_ENABLED } from '../config/features';
 import { useAuth } from '../contexts/AuthContext';
-import { DomainNotAllowedError } from '../services/authService';
+import { authService, DomainNotAllowedError } from '../services/authService';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { DetailSheet, SheetAction, sheetStyles } from '../components/DetailSheet';
+import { openMail } from '../utils/links';
 
 export const AccountScreen: React.FC = () => {
   const [loadingProvider, setLoadingProvider] = useState<'google' | 'azure' | null>(null);
+  const [howToJoinOpen, setHowToJoinOpen] = useState(false);
+  const [email, setEmail] = useState('');
   const { signInWithGoogle, signInWithMicrosoft, domainNotAllowed, clearDomainNotAllowed } = useAuth();
   const navigation = useNavigation<any>();
 
@@ -34,12 +40,23 @@ export const AccountScreen: React.FC = () => {
   }, [domainNotAllowed, clearDomainNotAllowed, navigation]);
 
   const handleSignIn = async (provider: 'google' | 'azure') => {
+    const typed = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(typed)) {
+      Alert.alert('Adresse requise', "Saisis l'adresse email de ton association pour continuer.");
+      return;
+    }
     setLoadingProvider(provider);
     try {
+      // Vérification AVANT Google : un domaine refusé ne voit jamais l'écran d'autorisation.
+      const allowed = await authService.isEmailDomainAllowed(typed);
+      if (!allowed) {
+        navigation.navigate('DomainNotAllowed');
+        return;
+      }
       if (provider === 'google') {
-        await signInWithGoogle();
+        await signInWithGoogle(typed);
       } else {
-        await signInWithMicrosoft();
+        await signInWithMicrosoft(typed);
       }
     } catch (error: any) {
       if (error instanceof DomainNotAllowedError) {
@@ -73,7 +90,27 @@ export const AccountScreen: React.FC = () => {
       </View>
 
       <View style={styles.contentCard}>
-        <View style={styles.scrollContent}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.emailLabel}>Ton adresse email d'association</Text>
+          <TextInput
+            style={styles.emailInput}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="prenom.nom@ton-asso.fr"
+            placeholderTextColor={colors.textLight}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+          />
+          <Text style={styles.emailHint}>
+            Nous vérifions ton adresse avant d'ouvrir Google : rien n'est partagé si ton domaine n'est pas autorisé.
+          </Text>
+
           <TouchableOpacity
             style={styles.oauthButton}
             onPress={() => handleSignIn('google')}
@@ -116,6 +153,12 @@ export const AccountScreen: React.FC = () => {
             </Text>
           </View>
 
+          <TouchableOpacity style={styles.visitorLink} onPress={() => setHowToJoinOpen(true)}>
+            <Text style={styles.visitorText}>
+              <Text style={styles.visitorLinkText}>Comment rejoindre ?</Text>
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.visitorLink}
             onPress={() => navigation.navigate('Accueil')}
@@ -124,6 +167,18 @@ export const AccountScreen: React.FC = () => {
               Tu n'es pas adhérent ? <Text style={styles.visitorLinkText}>Continuer en visiteur</Text>
             </Text>
           </TouchableOpacity>
+
+          <DetailSheet visible={howToJoinOpen} onClose={() => setHowToJoinOpen(false)}>
+            <Text style={sheetStyles.title}>Comment rejoindre ?</Text>
+            <Text style={sheetStyles.body}>
+              1. Il faut appartenir à une association MIAGE fédérée.{'\n\n'}
+              2. Connecte-toi avec Google en utilisant l'adresse email de ton association ou de ton université : c'est
+              elle qui te rattache automatiquement à ton association.{'\n\n'}
+              3. Si l'accès est refusé, le domaine de ton adresse n'est pas encore rattaché à ton association.
+              Demande à ton bureau de le signaler à la fédération.
+            </Text>
+            <SheetAction label="Écrire à la fédération" primary onPress={() => openMail('bureau@miage-connection.fr')} />
+          </DetailSheet>
 
           <View style={styles.legalRow}>
             <TouchableOpacity onPress={() => navigation.navigate('LegalDocument', { documentKey: 'cgu' })}>
@@ -138,7 +193,7 @@ export const AccountScreen: React.FC = () => {
               <Text style={styles.legalLinkText}>Mentions légales</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </View>
     </View>
   );
@@ -231,6 +286,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+  emailLabel: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 6 },
+  emailInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 13,
+    fontSize: 14,
+    color: colors.text,
+    backgroundColor: colors.white,
+  },
+  emailHint: { fontSize: 12, lineHeight: 17, color: colors.textLight, marginTop: 8, marginBottom: spacing.lg },
   infoBox: {
     backgroundColor: colors.primarySoft,
     padding: spacing.lg,

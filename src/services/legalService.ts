@@ -47,9 +47,4 @@ export const legalService = {
     if (error) throw error;
     return data;
   },
-
-  async requestAccountDeletion(userId: string): Promise<void> {
-    const { error } = await supabase.from('account_deletion_requests').insert({ user_id: userId });
-    if (error) throw error;
-  },
 };

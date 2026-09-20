@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   FlatList,
   Modal,
+  ScrollView,
+  KeyboardAvoidingView,
   TextInput,
   Alert,
 } from 'react-native';
@@ -136,8 +138,11 @@ export const DomainsScreen: React.FC = () => {
       />
 
       <Modal visible={addModalVisible} transparent animationType="fade" onRequestClose={() => setAddModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ScrollView
+            style={[styles.modalContent, { flexGrow: 0, maxHeight: '92%' }]}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Ajouter un domaine</Text>
               <TouchableOpacity onPress={() => setAddModalVisible(false)}>
@@ -192,8 +197,8 @@ export const DomainsScreen: React.FC = () => {
                 <Text style={styles.saveButtonText}>Ajouter</Text>
               )}
             </TouchableOpacity>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

@@ -102,11 +102,7 @@ export const HomeScreen: React.FC = () => {
             ) : null}
           </View>
 
-          <Text style={styles.greeting}>LA FÉDÉRATION NATIONALE DES ÉTUDIANTS ET DIPLÔMÉS DE MIAGE</Text>
           <Text style={styles.mainTitle}>Bienvenue dans le réseau MIAGE Connection.</Text>
-          <Text style={styles.description}>
-            Actualités, événements, associations et ressources des MIAGistes, au même endroit.
-          </Text>
         </View>
 
         {/* Chiffres clés */}
@@ -187,6 +183,14 @@ export const HomeScreen: React.FC = () => {
             iconColor={colors.iconYellow}
             onPress={() => navigation.navigate('ActuAdmin')}
           />
+          <CategoryItem
+            title="Jeux"
+            subtitle="Une petite pause"
+            iconName="game-controller-outline"
+            iconColor={colors.iconBlue}
+            onPress={() => navigation.navigate('Games')}
+            wide
+          />
         </View>
         </View>
       </ScrollView>
@@ -260,25 +264,12 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.primary,
   },
-  greeting: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: spacing.sm,
-    letterSpacing: 0.8,
-    lineHeight: 15,
-  },
   mainTitle: {
     fontSize: 26,
     fontWeight: '900',
     color: colors.white,
     lineHeight: 32,
     marginBottom: spacing.sm + 2,
-  },
-  description: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.8)',
-    lineHeight: 19,
   },
   statsCard: {
     flexDirection: 'row',

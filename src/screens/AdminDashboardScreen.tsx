@@ -314,6 +314,30 @@ export const AdminDashboardScreen: React.FC = () => {
               title="Fédération"
               items={[
                 {
+                  icon: 'people-outline',
+                  label: 'Annuaire des adhérents',
+                  description: 'Adhérents actifs de toutes les associations',
+                  onPress: () => navigation.navigate('MemberDirectory'),
+                },
+                {
+                  icon: 'stats-chart-outline',
+                  label: 'Statistiques',
+                  description: 'Adhérents, renouvellements, événements suivis, export',
+                  onPress: () => navigation.navigate('AdminStats'),
+                },
+                {
+                  icon: 'calendar-outline',
+                  label: "Fin d'adhésion",
+                  description: "Date de fin d'année universitaire, appliquée aux adhérents",
+                  onPress: () => navigation.navigate('MembershipSettings'),
+                },
+                {
+                  icon: 'ribbon-outline',
+                  label: 'Postes des adhérents',
+                  description: "Liste des postes proposés et couleur de leur badge dans l'annuaire",
+                  onPress: () => navigation.navigate('Positions'),
+                },
+                {
                   icon: 'globe-outline',
                   label: 'Domaines autorisés',
                   description: "Adresses email donnant accès à l'app",
@@ -391,7 +415,7 @@ export const AdminDashboardScreen: React.FC = () => {
           ]}
         />
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut} activeOpacity={0.8} accessibilityLabel="Se déconnecter">
           <Ionicons name="log-out-outline" size={18} color={colors.error} style={{ marginRight: 8 }} />
           <Text style={styles.logoutText}>Se déconnecter</Text>
         </TouchableOpacity>

@@ -69,6 +69,22 @@ export const pushNotificationService = {
     }
   },
 
+  // À la déconnexion : retire le jeton de CET appareil pour ce compte, afin que
+  // le téléphone ne reçoive plus les notifications de l'ancien compte.
+  async unregisterCurrentDevice(): Promise<void> {
+    if (!Device.isDevice || Platform.OS === 'web') return;
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') return;
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+      const { error } = await supabase.rpc('unregister_push_token', { p_token: token });
+      if (error) console.error('pushNotificationService: failed to remove token', error);
+    } catch (error) {
+      console.error('pushNotificationService: unregister failed', error);
+    }
+  },
+
   async getPreferences(userId: string): Promise<NotificationPreferences> {
     const { data, error } = await supabase
       .from('notification_preferences')

@@ -71,7 +71,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { title, body } = await req.json();
+    const payload = await req.json();
+    const { title, body } = payload;
+    // Préférence à respecter : messages manuels = announcements, rappels d'événements
+    // = events_reminders, nouveautés publiées = federation_news.
+    const ALLOWED_PREFERENCES = ['announcements', 'events_reminders', 'federation_news'];
+    const preference: string = ALLOWED_PREFERENCES.includes(payload.preference) ? payload.preference : 'announcements';
     const source = isCronCall ? 'scheduled' : 'manual';
     if (!title || !body) {
       return new Response(JSON.stringify({ error: 'title et body requis' }), {
@@ -104,12 +109,14 @@ Deno.serve(async (req) => {
 
     const { data: prefs, error: prefsError } = await adminClient
       .from('notification_preferences')
-      .select('user_id, announcements')
+      .select(`user_id, ${preference}`)
       .in('user_id', activeIds);
     if (prefsError) throw prefsError;
 
     const optedOut = new Set(
-      (prefs || []).filter((p: { announcements: boolean }) => p.announcements === false).map((p: { user_id: string }) => p.user_id)
+      (prefs || [])
+        .filter((p: Record<string, unknown>) => p[preference] === false)
+        .map((p: Record<string, unknown>) => p.user_id as string)
     );
     const eligibleIds = activeIds.filter((id: string) => !optedOut.has(id));
 

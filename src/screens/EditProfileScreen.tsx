@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -19,16 +19,35 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
+import { positionsService, MemberPosition } from '../services/positionsService';
 
 // Profil de l'adhérent : ces informations alimentent l'annuaire de son association.
 export const EditProfileScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { user, refresh } = useAuth();
   const [fullName, setFullName] = useState(user?.full_name || '');
-  const [position, setPosition] = useState(user?.position_in_association || '');
+  const [positionId, setPositionId] = useState<string | null>(user?.position_id ?? null);
+  const [positions, setPositions] = useState<MemberPosition[]>([]);
+  const [positionsError, setPositionsError] = useState(false);
   const [year, setYear] = useState(user?.graduation_year ? String(user.graduation_year) : '');
   const [contactEmail, setContactEmail] = useState(user?.contact_email || '');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    positionsService
+      .getActive()
+      .then(setPositions)
+      .catch((e) => {
+        console.error('EditProfileScreen: positions error', e);
+        setPositionsError(true);
+      });
+  }, []);
+
+  // Poste actuel désactivé depuis : il reste sélectionné (et gardé) tant que l'adhérent ne change pas.
+  const options: { id: string; label: string; color: string }[] = [...positions];
+  if (user?.position_id && user.position_label && !positions.some((p) => p.id === user.position_id)) {
+    options.push({ id: user.position_id, label: user.position_label, color: user.position_color || '#6B7280' });
+  }
 
   const handleSave = async () => {
     const yearNumber = year.trim() ? parseInt(year.trim(), 10) : null;
@@ -40,7 +59,7 @@ export const EditProfileScreen: React.FC = () => {
     try {
       await authService.updateUserProfile({
         full_name: fullName.trim() || null,
-        position_in_association: position.trim() || null,
+        position_id: positionId,
         graduation_year: yearNumber,
         contact_email: contactEmail.trim() || null,
       } as any);
@@ -81,7 +100,33 @@ export const EditProfileScreen: React.FC = () => {
           <TextInput style={styles.input} value={fullName} onChangeText={setFullName} placeholder="Prénom Nom" placeholderTextColor={colors.textLight} />
 
           <Text style={styles.label}>Poste dans l'association</Text>
-          <TextInput style={styles.input} value={position} onChangeText={setPosition} placeholder="Ex : Trésorier" placeholderTextColor={colors.textLight} />
+          {positionsError ? (
+            <Text style={styles.hint}>Impossible de charger la liste des postes. Réessaie plus tard.</Text>
+          ) : (
+            <View style={styles.chips}>
+              {options.map((opt) => {
+                const selected = positionId === opt.id;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[styles.chip, { borderColor: opt.color }, selected && { backgroundColor: opt.color }]}
+                    onPress={() => setPositionId(selected ? null : opt.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.chipText, { color: selected ? colors.white : opt.color }]}>{opt.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+          {!positionId && user?.position_in_association ? (
+            <Text style={styles.hint}>
+              Ton poste actuel « {user.position_in_association} » est un ancien texte libre : choisis un poste dans la
+              liste pour qu'il s'affiche avec un badge.
+            </Text>
+          ) : null}
 
           <Text style={styles.label}>Année de promotion</Text>
           <TextInput
@@ -166,6 +211,10 @@ const styles = StyleSheet.create({
   },
   infoText: { flex: 1, fontSize: 12, lineHeight: 17, color: colors.text },
   label: { fontSize: 12, fontWeight: '700', color: colors.textLight, marginTop: spacing.md, marginBottom: 6 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  chip: { borderWidth: 2, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.white },
+  chipText: { fontSize: 12, fontWeight: '800' },
+  hint: { fontSize: 12, lineHeight: 17, color: colors.textLight, marginTop: 8 },
   input: {
     borderWidth: 1,
     borderColor: colors.border,

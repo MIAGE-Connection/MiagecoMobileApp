@@ -18,6 +18,8 @@ export interface DirectoryMember {
   graduation_year: number | null;
   contact_email: string | null;
   is_referent: boolean;
+  position_color: string | null; // null = ancien texte libre
+  association_name: string | null;
 }
 
 export const memberSpaceService = {
@@ -34,7 +36,7 @@ export const memberSpaceService = {
   async getDirectory(): Promise<DirectoryMember[]> {
     const { data, error } = await supabase
       .from('profiles_public_view')
-      .select('id, full_name, position_in_association, association_id, graduation_year, contact_email, is_referent')
+      .select('id, full_name, position_in_association, association_id, graduation_year, contact_email, is_referent, position_color, association_name')
       .order('full_name');
 
     if (error) throw error;

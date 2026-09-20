@@ -18,8 +18,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { ImageUploader } from '../components/ImageUploader';
+import { CityPicker } from '../components/CityPicker';
 import { Toast } from '../components/Toast';
 import { associationService } from '../services/associationService';
+import { useAuth } from '../contexts/AuthContext';
 
 interface EditAssociationScreenProps {
   route?: any;
@@ -28,6 +30,8 @@ interface EditAssociationScreenProps {
 export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ route }) => {
   const navigation = useNavigation<any>();
   const associationId: string = route?.params?.associationId || '';
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'admin_national';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -107,6 +111,8 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
     setSaving(true);
     try {
       const associationData = {
+        // Le nom n'est envoyé que par le super admin (côté référent le champ est verrouillé).
+        ...(isSuperAdmin ? { name: form.name.trim() } : {}),
         description: form.description.trim(),
         // Ce sont ces deux champs (location, email_contact) qui s'affichent dans l'annuaire
         // public ; on garde city/email alignés pour ne pas avoir deux valeurs différentes.
@@ -161,7 +167,7 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} accessibilityLabel="Retour">
         <Ionicons name="chevron-back" size={24} color={colors.text} />
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>Mon association</Text>
+      <Text style={styles.headerTitle}>{isSuperAdmin ? "Modifier l'association" : 'Mon association'}</Text>
       <View style={styles.backButton} />
     </View>
     <KeyboardAvoidingView
@@ -181,10 +187,21 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Nom</Text>
-          <View style={styles.disabledInput}>
-            <Text style={styles.disabledText}>{form.name}</Text>
-          </View>
-          <Text style={styles.helperText}>Le nom est géré par la fédération</Text>
+          {isSuperAdmin ? (
+            <TextInput
+              style={styles.input}
+              placeholder="Nom de l'association"
+              value={form.name}
+              onChangeText={(value) => updateField('name', value)}
+            />
+          ) : (
+            <>
+              <View style={styles.disabledInput}>
+                <Text style={styles.disabledText}>{form.name}</Text>
+              </View>
+              <Text style={styles.helperText}>Le nom est géré par la fédération</Text>
+            </>
+          )}
         </View>
 
         <View style={styles.inputGroup}>
@@ -224,12 +241,7 @@ export const EditAssociationScreen: React.FC<EditAssociationScreenProps> = ({ ro
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Ville / localisation</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ex: Nanterre"
-            value={form.city}
-            onChangeText={(value) => updateField('city', value)}
-          />
+          <CityPicker value={form.city} onChange={(city) => updateField('city', city)} />
         </View>
 
         <View style={styles.inputGroup}>

@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
+import { normalizeText } from '../data/frenchCities';
 import { spacing } from '../theme/spacing';
 import { associationService, Association } from '../services/associationService';
 import { useRemote } from '../hooks/useRemote';
@@ -33,8 +34,9 @@ export const AssociationsDirectoryScreen: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [selected, setSelected] = useState<Association | null>(null);
 
-  const filteredAssociations = associations.filter(asso =>
-    asso.name.toLowerCase().includes(searchText.toLowerCase())
+  // Recherche par nom ou par ville, sans tenir compte des accents ni des majuscules.
+  const filteredAssociations = associations.filter((asso) =>
+    normalizeText(`${asso.name} ${asso.location ?? ''} ${asso.city ?? ''}`).includes(normalizeText(searchText))
   );
 
   const renderAssociationCard = ({ item }: { item: Association }) => (
@@ -112,15 +114,20 @@ export const AssociationsDirectoryScreen: React.FC = () => {
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
-        <Text style={styles.title}>Annuaire des associations</Text>
-        <Text style={styles.subtitle}>{filteredAssociations.length} associations</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} accessibilityLabel="Retour">
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerTexts}>
+          <Text style={styles.title}>Annuaire des associations</Text>
+          <Text style={styles.subtitle}>{filteredAssociations.length} associations</Text>
+        </View>
       </View>
 
       <View style={styles.searchContainer}>
         <Ionicons name="search-outline" size={18} color={colors.textLight} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Rechercher une association..."
+          placeholder="Rechercher par nom ou par ville..."
           placeholderTextColor={colors.textLight}
           value={searchText}
           onChangeText={setSearchText}
@@ -189,9 +196,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
-    paddingHorizontal: spacing.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: spacing.xl,
+    paddingLeft: spacing.sm,
     paddingVertical: spacing.lg,
   },
+  backButton: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', marginRight: spacing.xs },
+  headerTexts: { flex: 1 },
   title: {
     fontSize: 24,
     fontWeight: '900',

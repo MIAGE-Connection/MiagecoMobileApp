@@ -15,9 +15,10 @@ interface AuthContextValue {
   isActiveMember: boolean;
   needsCgu: boolean;
   domainNotAllowed: boolean;
+  finishingLogin: boolean;
   clearDomainNotAllowed: () => void;
-  signInWithGoogle: () => Promise<void>;
-  signInWithMicrosoft: () => Promise<void>;
+  signInWithGoogle: (loginHint?: string) => Promise<void>;
+  signInWithMicrosoft: (loginHint?: string) => Promise<void>;
   signOut: () => Promise<void>;
   renewMembership: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -31,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isActiveMember, setIsActiveMember] = useState(false);
   const [needsCgu, setNeedsCgu] = useState(false);
   const [domainNotAllowed, setDomainNotAllowed] = useState(false);
+  const [finishingLogin, setFinishingLogin] = useState(false);
   const registeredForPushRef = useRef<string | null>(null);
 
   // Plusieurs rechargements peuvent se chevaucher (événements d'auth, fin de
@@ -49,6 +51,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         legalService.needsCguAcceptance(),
       ]);
     }
+    if (__DEV__) {
+      console.log(
+        `[auth] refresh #${seq}`,
+        seq !== refreshSeq.current ? 'ignoré (plus récent en cours)' : { user: !!currentUser, role: currentUser?.role, active, cguPending }
+      );
+    }
     if (seq !== refreshSeq.current) return;
     setUser(currentUser);
     setIsActiveMember(active);
@@ -64,7 +72,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     })();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (__DEV__) console.log('[auth] évènement', event);
       refresh();
     });
 
@@ -92,14 +101,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (Platform.OS === 'web') return;
 
     const handleUrl = async (url: string | null) => {
+      if (__DEV__) console.log('[auth] lien reçu :', url ? url.replace(/([?#&](code|access_token|refresh_token)=)[^&]+/g, '$1…') : url);
       if (!url) return;
       // Android livre parfois l'URL sous forme "opaque" (miageconnect:?code=...,
       // sans "//"), donc on compare uniquement le schéma plutôt que le préfixe
       // exact renvoyé par makeRedirectUri().
       if (Linking.parse(url).scheme?.toLowerCase() !== 'miageconnect') return;
       // Le code de connexion est à usage unique : on ne traite jamais deux fois le même lien.
-      if (handledUrlRef.current === url) return;
+      if (handledUrlRef.current === url) {
+        if (__DEV__) console.log('[auth] lien déjà traité, ignoré');
+        return;
+      }
       handledUrlRef.current = url;
+      // Écran de chargement pendant la finalisation : évite de montrer l'accueil une seconde.
+      setFinishingLogin(true);
       try {
         await completeOAuthRedirect(url);
         await refresh();
@@ -113,6 +128,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Rendre l'échec visible : sans ça l'utilisateur revient simplement à l'accueil.
           Alert.alert('Connexion impossible', err?.message || 'Une erreur est survenue pendant la connexion.');
         }
+      } finally {
+        setFinishingLogin(false);
       }
     };
 
@@ -138,17 +155,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, [user, isActiveMember]);
 
-  const signInWithGoogle = async () => {
-    await authService.signInWithProvider('google');
+  const signInWithGoogle = async (loginHint?: string) => {
+    await authService.signInWithProvider('google', loginHint);
     await refresh();
   };
 
-  const signInWithMicrosoft = async () => {
-    await authService.signInWithProvider('azure');
+  const signInWithMicrosoft = async (loginHint?: string) => {
+    await authService.signInWithProvider('azure', loginHint);
     await refresh();
   };
 
   const signOut = async () => {
+    // Doit passer avant la déconnexion : la suppression du jeton demande une session valide.
+    await pushNotificationService.unregisterCurrentDevice();
     await authService.logout();
     refreshSeq.current++;
     handledUrlRef.current = null;
@@ -172,6 +191,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isActiveMember,
         needsCgu,
         domainNotAllowed,
+        finishingLogin,
         clearDomainNotAllowed,
         signInWithGoogle,
         signInWithMicrosoft,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer, useFocusEffect } from '@react-navigation/native';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Image, StyleSheet, Text } from 'react-native';
 import { colors } from '../theme/colors';
 
 // Screens
@@ -23,6 +23,9 @@ import { ScheduledNotificationsScreen } from '../screens/ScheduledNotificationsS
 import { ContentManagerScreen } from '../screens/ContentManagerScreen';
 import { DeletionRequestsScreen } from '../screens/DeletionRequestsScreen';
 import { HomeStatsScreen } from '../screens/HomeStatsScreen';
+import { AdminStatsScreen } from '../screens/AdminStatsScreen';
+import { MembershipSettingsScreen } from '../screens/MembershipSettingsScreen';
+import { PositionsScreen } from '../screens/PositionsScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
 import { NotificationInboxScreen } from '../screens/NotificationInboxScreen';
 import { NotificationHistoryScreen } from '../screens/NotificationHistoryScreen';
@@ -34,6 +37,10 @@ import { CguAcceptanceScreen } from '../screens/CguAcceptanceScreen';
 import { LegalDocumentScreen } from '../screens/LegalDocumentScreen';
 import { MyDataScreen } from '../screens/MyDataScreen';
 import { AccountDeletionRequestScreen } from '../screens/AccountDeletionRequestScreen';
+import { GamesScreen } from '../screens/GamesScreen';
+import { MemoryGameScreen } from '../screens/MemoryGameScreen';
+import { SnakeGameScreen } from '../screens/SnakeGameScreen';
+import { PuzzleGameScreen } from '../screens/PuzzleGameScreen';
 import { CustomTabBar } from '../components/CustomTabBar';
 
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -108,6 +115,9 @@ const AccountStackNavigator: React.FC = () => {
                 <AccountStack.Screen name="ScheduledNotifications" component={ScheduledNotificationsScreen} />
                 <AccountStack.Screen name="DeletionRequests" component={DeletionRequestsScreen} />
                 <AccountStack.Screen name="HomeStats" component={HomeStatsScreen} />
+                <AccountStack.Screen name="AdminStats" component={AdminStatsScreen} />
+                <AccountStack.Screen name="MembershipSettings" component={MembershipSettingsScreen} />
+                <AccountStack.Screen name="Positions" component={PositionsScreen} />
                 <AccountStack.Screen name="NotificationHistory" component={NotificationHistoryScreen} />
                 <AccountStack.Screen name="DomainAuditLog" component={DomainAuditLogScreen} />
               </>
@@ -151,6 +161,32 @@ const TabsNavigator: React.FC = () => (
   </Tab.Navigator>
 );
 
+// Écran plein cadre (logo + roue) pendant que la connexion se termine au retour de Google.
+const LoginOverlay: React.FC = () => {
+  const { finishingLogin } = useAuth();
+  if (!finishingLogin) return null;
+  return (
+    <View style={loginOverlayStyles.container}>
+      <Image source={require('../../assets/icon.png')} style={loginOverlayStyles.logo} />
+      <ActivityIndicator size="large" color={colors.white} style={{ marginTop: 28 }} />
+      <Text style={loginOverlayStyles.text}>Connexion en cours…</Text>
+    </View>
+  );
+};
+
+const loginOverlayStyles = StyleSheet.create({
+  container: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.cardDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    elevation: 1000,
+  },
+  logo: { width: 96, height: 96, borderRadius: 22 },
+  text: { color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 14 },
+});
+
 export const AppNavigator: React.FC = () => {
   return (
     <AuthProvider>
@@ -161,8 +197,13 @@ export const AppNavigator: React.FC = () => {
           <RootStack.Screen name="Tabs" component={TabsNavigator} />
           <RootStack.Screen name="NotificationInbox" component={NotificationInboxScreen} />
           <RootStack.Screen name="NotificationPreferences" component={NotificationPreferencesScreen} />
+          <RootStack.Screen name="Games" component={GamesScreen} />
+          <RootStack.Screen name="MemoryGame" component={MemoryGameScreen} />
+          <RootStack.Screen name="SnakeGame" component={SnakeGameScreen} />
+          <RootStack.Screen name="PuzzleGame" component={PuzzleGameScreen} />
         </RootStack.Navigator>
       </NavigationContainer>
+      <LoginOverlay />
     </AuthProvider>
   );
 };

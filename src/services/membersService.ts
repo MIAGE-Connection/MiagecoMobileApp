@@ -7,8 +7,13 @@ export interface Member {
   role: 'member' | 'admin_association' | 'admin_national';
   is_suspended: boolean;
   valid_until: string | null;
-  position_in_association: string | null;
+  position_in_association: string | null; // ancien texte libre
+  member_positions: { label: string; color: string } | null;
 }
+
+// Poste affiché d'un adhérent : celui de la liste, à défaut l'ancien texte libre (sans couleur).
+export const positionOf = (m: Member): { label: string; color: string | null } | null =>
+  m.member_positions ?? (m.position_in_association ? { label: m.position_in_association, color: null } : null);
 
 export interface ReferentInfo {
   id: string;
@@ -21,12 +26,12 @@ export const membersService = {
   async getMembersForAssociation(associationId: string): Promise<Member[]> {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, full_name, role, is_suspended, valid_until, position_in_association')
+      .select('id, email, full_name, role, is_suspended, valid_until, position_in_association, member_positions(label, color)')
       .eq('association_id', associationId)
       .order('email');
 
     if (error) throw error;
-    return data || [];
+    return (data as any as Member[]) || [];
   },
 
   // Admin national uniquement (RLS) : un référent par association.

@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   FlatList,
   Modal,
+  ScrollView,
+  KeyboardAvoidingView,
   TextInput,
   Alert,
   Switch,
@@ -224,8 +226,11 @@ export const ScheduledNotificationsScreen: React.FC = () => {
       />
 
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ScrollView
+            style={[styles.modalContent, { flexGrow: 0, maxHeight: '92%' }]}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Programmer une notification</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
@@ -311,8 +316,8 @@ export const ScheduledNotificationsScreen: React.FC = () => {
             <TouchableOpacity style={styles.saveButton} onPress={handleCreate} disabled={saving}>
               {saving ? <ActivityIndicator color={colors.white} /> : <Text style={styles.saveButtonText}>Programmer</Text>}
             </TouchableOpacity>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
