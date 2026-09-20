@@ -75,6 +75,17 @@ export const positionsService = {
     if (!data?.length) throw new Error('La modification a été refusée par la base (droits insuffisants).');
   },
 
+  // Nouvel ordre d'affichage : la liste reçue devient l'ordre (fonction atomique côté base, phase 18).
+  async reorder(ids: string[]): Promise<void> {
+    const { error } = await supabase.rpc('reorder_member_positions', { p_ids: ids });
+    if (error) {
+      if (error.code === 'PGRST202' || error.code === '42883') {
+        throw new Error("Le script SQL de la phase 18 n'a pas encore été lancé dans Supabase.");
+      }
+      throw friendly(error);
+    }
+  },
+
   // Les adhérents qui avaient ce poste se retrouvent sans poste (ON DELETE SET NULL).
   async remove(id: string): Promise<void> {
     const { data, error } = await supabase.from('member_positions').delete().eq('id', id).select('id');

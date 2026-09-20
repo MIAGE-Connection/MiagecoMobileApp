@@ -26,6 +26,7 @@ import { HomeStatsScreen } from '../screens/HomeStatsScreen';
 import { AdminStatsScreen } from '../screens/AdminStatsScreen';
 import { MembershipSettingsScreen } from '../screens/MembershipSettingsScreen';
 import { PositionsScreen } from '../screens/PositionsScreen';
+import { AdminAuditLogScreen } from '../screens/AdminAuditLogScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
 import { NotificationInboxScreen } from '../screens/NotificationInboxScreen';
 import { NotificationHistoryScreen } from '../screens/NotificationHistoryScreen';
@@ -118,6 +119,7 @@ const AccountStackNavigator: React.FC = () => {
                 <AccountStack.Screen name="AdminStats" component={AdminStatsScreen} />
                 <AccountStack.Screen name="MembershipSettings" component={MembershipSettingsScreen} />
                 <AccountStack.Screen name="Positions" component={PositionsScreen} />
+                <AccountStack.Screen name="AdminAuditLog" component={AdminAuditLogScreen} />
                 <AccountStack.Screen name="NotificationHistory" component={NotificationHistoryScreen} />
                 <AccountStack.Screen name="DomainAuditLog" component={DomainAuditLogScreen} />
               </>

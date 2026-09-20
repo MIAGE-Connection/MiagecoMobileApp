@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,11 +12,10 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { memberSpaceService, DirectoryMember } from '../services/memberSpaceService';
-import { useRemote } from '../hooks/useRemote';
 import { ErrorState } from '../components/ErrorState';
 import { DetailSheet, SheetAction, sheetStyles } from '../components/DetailSheet';
 import { openMail } from '../utils/links';
@@ -24,22 +23,65 @@ import { PositionBadge } from '../components/PositionBadge';
 
 export const MemberDirectoryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const { data: members, loading, refreshing, error, refresh, retry } = useRemote<DirectoryMember[]>(
-    () => memberSpaceService.getDirectory(),
-    []
-  );
+  const [members, setMembers] = useState<DirectoryMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [error, setError] = useState(false);
   const [query, setQuery] = useState('');
+  const [search, setSearch] = useState(''); // saisie « retardée » : une requête par pause de frappe, pas par lettre
   const [selected, setSelected] = useState<DirectoryMember | null>(null);
+  // Une réponse arrivée après une nouvelle recherche est ignorée (sinon elle écraserait la liste à jour).
+  const requestId = useRef(0);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter((m) =>
-      [m.full_name, m.position_in_association, m.association_name, m.graduation_year ? String(m.graduation_year) : '']
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q))
-    );
-  }, [members, query]);
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(query), 350);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const loadFirst = useCallback(async () => {
+    const id = ++requestId.current;
+    try {
+      const page = await memberSpaceService.getDirectoryPage(0, search);
+      if (id !== requestId.current) return;
+      setMembers(page.rows);
+      setHasMore(page.hasMore);
+      setError(false);
+    } catch (e) {
+      if (id !== requestId.current) return;
+      console.error('MemberDirectoryScreen: load error', e);
+      setError(true);
+    } finally {
+      if (id === requestId.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  }, [search]);
+
+  // Rechargé à chaque ouverture de l'écran et à chaque nouvelle recherche.
+  useFocusEffect(
+    useCallback(() => {
+      loadFirst();
+    }, [loadFirst])
+  );
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    const id = requestId.current;
+    setLoadingMore(true);
+    try {
+      const page = await memberSpaceService.getDirectoryPage(members.length, search);
+      if (id !== requestId.current) return;
+      setMembers((current) => [...current, ...page.rows.filter((row) => !current.some((c) => c.id === row.id))]);
+      setHasMore(page.hasMore);
+    } catch (e) {
+      console.error('MemberDirectoryScreen: load more error', e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -61,11 +103,16 @@ export const MemberDirectoryScreen: React.FC = () => {
       </View>
 
       <FlatList
-        data={filtered}
+        data={members}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         refreshing={refreshing}
-        onRefresh={refresh}
+        onRefresh={() => {
+          setRefreshing(true);
+          loadFirst();
+        }}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={styles.searchBox}>
@@ -80,9 +127,12 @@ export const MemberDirectoryScreen: React.FC = () => {
             />
           </View>
         }
+        ListFooterComponent={
+          loadingMore ? <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.primary} /> : null
+        }
         ListEmptyComponent={
           error ? (
-            <ErrorState onRetry={retry} />
+            <ErrorState onRetry={loadFirst} />
           ) : (
             <Text style={styles.emptyText}>{query ? 'Aucun résultat.' : 'Aucun adhérent pour le moment.'}</Text>
           )

@@ -35,7 +35,7 @@ interface PositionsData {
 // Chaque poste a une couleur propre (badge dans l'annuaire).
 export const PositionsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const { data, loading, refreshing, error, refresh, retry, reload } = useRemote<PositionsData>(
+  const { data, setData, loading, refreshing, error, refresh, retry, reload } = useRemote<PositionsData>(
     async () => {
       const [positions, usage] = await Promise.all([positionsService.getAll(), positionsService.getUsage()]);
       return { positions, usage };
@@ -98,6 +98,21 @@ export const PositionsScreen: React.FC = () => {
       Alert.alert('Erreur', e?.message || "Impossible d'enregistrer ce poste.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Monte / descend un poste : la liste s'affiche tout de suite dans le nouvel ordre, puis est enregistrée.
+  const handleMove = async (index: number, delta: -1 | 1) => {
+    const target = index + delta;
+    if (target < 0 || target >= data.positions.length) return;
+    const reordered = [...data.positions];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    setData((current) => ({ ...current, positions: reordered }));
+    try {
+      await positionsService.reorder(reordered.map((p) => p.id));
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message || "Impossible d'enregistrer le nouvel ordre.");
+      await reload();
     }
   };
 
@@ -165,16 +180,38 @@ export const PositionsScreen: React.FC = () => {
         ListHeaderComponent={
           <Text style={styles.intro}>
             Les adhérents choisissent leur poste dans cette liste ; il s'affiche sous forme de badge coloré dans
-            l'annuaire. Un poste désactivé n'est plus proposé mais reste affiché chez ceux qui l'ont.
+            l'annuaire. Les flèches règlent l'ordre dans lequel les postes sont proposés. Un poste désactivé n'est plus proposé mais reste affiché chez ceux qui l'ont.
           </Text>
         }
         ListEmptyComponent={
           error ? <ErrorState onRetry={retry} /> : <Text style={styles.empty}>Aucun poste. Ajoute-en un avec le +.</Text>
         }
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const count = data.usage[item.id] || 0;
           return (
             <View style={[styles.card, !item.is_active && styles.cardInactive]}>
+              <View style={styles.orderButtons}>
+                <TouchableOpacity
+                  onPress={() => handleMove(index, -1)}
+                  disabled={index === 0}
+                  style={styles.orderButton}
+                  accessibilityLabel={`Monter ${item.label}`}
+                >
+                  <Ionicons name="chevron-up" size={20} color={index === 0 ? colors.border : colors.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleMove(index, 1)}
+                  disabled={index === data.positions.length - 1}
+                  style={styles.orderButton}
+                  accessibilityLabel={`Descendre ${item.label}`}
+                >
+                  <Ionicons
+                    name="chevron-down"
+                    size={20}
+                    color={index === data.positions.length - 1 ? colors.border : colors.primary}
+                  />
+                </TouchableOpacity>
+              </View>
               <View style={styles.cardInfo}>
                 <PositionBadge label={item.label} color={item.color} style={{ marginTop: 0 }} />
                 <Text style={styles.cardMeta}>
@@ -300,6 +337,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   cardInactive: { opacity: 0.6 },
+  orderButtons: { marginRight: 2 },
+  orderButton: { width: 32, height: 26, justifyContent: 'center', alignItems: 'center' },
   cardInfo: { flex: 1 },
   cardMeta: { fontSize: 12, color: colors.textLight, marginTop: 6 },
   cardButton: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },

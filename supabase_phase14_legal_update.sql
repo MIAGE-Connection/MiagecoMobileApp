@@ -10,8 +10,11 @@
 -- ⚠ Passer les CGU en 1.1 redemande leur acceptation à TOUS les adhérents à leur prochaine connexion
 --   (c'est le mécanisme prévu). Pour ne pas le faire, garde `version = '1.0'` dans le bloc CGU.
 --
+-- Durée de conservation : 3 ans après la fin de la dernière adhésion (durée usuelle pour la gestion d'adhérents
+-- d'une association ; le RGPD n'impose pas de chiffre précis). Elle est APPLIQUÉE automatiquement par la
+-- tâche mensuelle de la phase 19 : ne pas changer le chiffre du texte sans changer la phase 19.
+--
 -- Non couvert ici, à décider par l'association (je ne peux pas l'inventer) :
---   * la durée de conservation des données après la fin d'adhésion ;
 --   * la région d'hébergement Supabase et les transferts hors UE (Google, Expo/Firebase) ;
 --   * un éventuel délégué à la protection des données.
 
@@ -54,7 +57,9 @@ Les jeux (Memory, Snake, Taquin) fonctionnent sans compte. Tes scores et records
 
 Combien de temps tes données sont conservées
 
-Tant que ton compte est actif. Tu peux demander la suppression de ton compte à tout moment depuis l'application.
+Tant que ton compte est actif, puis au maximum 3 ans après la fin de ta dernière période d'adhésion si tu ne la renouvelles pas : ton compte et tes données sont alors supprimés automatiquement. Tu peux aussi demander la suppression de ton compte à tout moment depuis l'application ; elle est traitée sous un mois.
+
+Le journal des actions d'administration (par exemple la suspension d'un compte ou la nomination d'un référent) est conservé 1 an. Il est anonymisé dès que le compte concerné est supprimé.
 
 Tes droits
 

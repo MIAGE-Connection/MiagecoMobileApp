@@ -89,10 +89,8 @@ export const AdminDashboardScreen: React.FC = () => {
   }
 
   const loadAssociation = async () => {
-    console.log('AdminDashboard: Loading association with ID:', user.associationId);
     try {
       const data = await associationService.getAssociationById(user.associationId);
-      console.log('AdminDashboard: Data received:', data);
       setAssociation(data);
     } catch (error) {
       console.error('AdminDashboard: Error loading association:', error);
@@ -336,6 +334,12 @@ export const AdminDashboardScreen: React.FC = () => {
                   label: 'Postes des adhérents',
                   description: "Liste des postes proposés et couleur de leur badge dans l'annuaire",
                   onPress: () => navigation.navigate('Positions'),
+                },
+                {
+                  icon: 'shield-checkmark-outline',
+                  label: 'Journal des actions',
+                  description: "Suspensions, référents et date de fin d'adhésion",
+                  onPress: () => navigation.navigate('AdminAuditLog'),
                 },
                 {
                   icon: 'globe-outline',

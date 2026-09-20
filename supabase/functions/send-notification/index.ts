@@ -78,6 +78,12 @@ Deno.serve(async (req) => {
     const ALLOWED_PREFERENCES = ['announcements', 'events_reminders', 'federation_news'];
     const preference: string = ALLOWED_PREFERENCES.includes(payload.preference) ? payload.preference : 'announcements';
     const source = isCronCall ? 'scheduled' : 'manual';
+    // Rappel de fin d'adhésion (job planifié uniquement) : ne cible que les adhérents dont l'adhésion
+    // se termine exactement ce jour-là (YYYY-MM-DD). Ignoré pour un appel manuel.
+    const expiresOn: string | null =
+      isCronCall && typeof payload.expires_on === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payload.expires_on)
+        ? payload.expires_on
+        : null;
     if (!title || !body) {
       return new Response(JSON.stringify({ error: 'title et body requis' }), {
         status: 400,
@@ -92,11 +98,13 @@ Deno.serve(async (req) => {
       await adminClient.from('notification_history').insert({ title, body, source, sent_count: sentCount });
     };
 
-    const { data: activeProfiles, error: activeError } = await adminClient
+    let activeQuery = adminClient
       .from('profiles')
       .select('id')
       .eq('is_suspended', false)
       .gte('valid_until', new Date().toISOString().slice(0, 10));
+    if (expiresOn) activeQuery = activeQuery.eq('valid_until', expiresOn);
+    const { data: activeProfiles, error: activeError } = await activeQuery;
     if (activeError) throw activeError;
 
     const activeIds = (activeProfiles || []).map((p: { id: string }) => p.id);
