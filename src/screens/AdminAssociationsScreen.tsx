@@ -91,7 +91,7 @@ export const AdminAssociationsScreen: React.FC = () => {
       await load();
       Alert.alert(
         'Association créée',
-        'Pense à lui rattacher son domaine email (Domaines) pour que ses adhérents puissent se connecter, puis à nommer son référent.'
+        "Pense à lui rattacher son domaine email (Domaines) pour que ses adhérents puissent se connecter, puis à désigner l'admin de l'asso."
       );
     } catch (error: any) {
       console.error('AdminAssociationsScreen: create error', error);
@@ -155,7 +155,7 @@ export const AdminAssociationsScreen: React.FC = () => {
               <View style={styles.cardInfo}>
                 <Text style={styles.assoName}>{item.name}</Text>
                 <Text style={styles.referentText}>
-                  {referent ? `Référent : ${referent.full_name || referent.email}` : 'Aucun référent désigné'}
+                  {referent ? `Admin de l'asso : ${referent.full_name || referent.email}` : "Aucun admin d'asso désigné"}
                 </Text>
                 <View style={styles.publishRow}>
                   <Switch

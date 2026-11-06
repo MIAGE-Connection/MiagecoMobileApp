@@ -7,8 +7,9 @@
 --    notification (catégorie « annonces », donc reçue en mode « Toutes » ou « Essentielles »).
 -- 2. Conservation : les données d'un adhérent sont supprimées 3 ans après la fin de sa dernière période
 --    d'adhésion (durée de conservation annoncée dans la politique de confidentialité, phase 14).
---    Le journal des actions est purgé au bout d'un an. Chaque mois, tâche planifiée.
---    Les administrateurs (référents, super admin) ne sont jamais purgés automatiquement.
+--    Le journal des actions est purgé au bout d'un an, l'historique d'envoi des notifications au bout de
+--    90 jours. Chaque mois, tâche planifiée.
+--    Les administrateurs (admins d'asso, super admin) ne sont jamais purgés automatiquement.
 
 -- ============================================================
 -- 1. Rappel avant la fin d'adhésion
@@ -74,7 +75,8 @@ SELECT cron.schedule('send-membership-reminders', '0 8 * * *', 'SELECT public.se
 -- 2. Conservation limitée des données
 -- ============================================================
 
--- Supprime les comptes d'adhérents dont l'adhésion est terminée depuis plus de 3 ans, et le journal de plus d'un an.
+-- Supprime les comptes d'adhérents dont l'adhésion est terminée depuis plus de 3 ans, le journal de plus d'un an
+-- et l'historique d'envoi des notifications de plus de 90 jours.
 -- p_dry_run = true (défaut) : ne supprime rien, renvoie seulement le nombre de comptes concernés.
 CREATE OR REPLACE FUNCTION public.purge_expired_data(p_dry_run boolean DEFAULT true)
 RETURNS integer
@@ -105,6 +107,10 @@ BEGIN
 
   DELETE FROM public.admin_audit_log
   WHERE created_at < now() - INTERVAL '1 year' AND action <> 'account_purge';
+
+  -- Historique technique d'envoi des notifications (une ligne par personne et par envoi) : jamais relu par
+  -- l'app, il ne sert qu'au dépannage. 90 jours suffisent, sinon il devient la plus grosse table de la base.
+  DELETE FROM public.notification_send_log WHERE sent_at < now() - INTERVAL '90 days';
 
   RETURN v_count;
 END;

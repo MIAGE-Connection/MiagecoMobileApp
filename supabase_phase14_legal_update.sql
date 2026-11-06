@@ -46,7 +46,7 @@ Qui voit quoi
 
 - Toi-même, dans l'app.
 - Les autres adhérents actifs de ton association : dans l'annuaire, ils voient ton nom, ton poste, ton année de promotion et l'email de contact que tu as choisi de renseigner. Ton adresse de connexion n'est jamais affichée.
-- Le référent de ton association et l'administration nationale de MIAGE Connection, dans le cadre de la gestion de la fédération.
+- L'admin de l'asso de ton association et l'administration nationale de MIAGE Connection, dans le cadre de la gestion de la fédération.
 - Les sous-traitants techniques listés dans les mentions légales (Supabase, Google, Expo/Firebase), uniquement pour faire fonctionner l'app.
 
 Les événements publiés en accès public et les informations des associations (nom, ville, contact) sont visibles par tout le monde, sans compte.
@@ -59,7 +59,7 @@ Combien de temps tes données sont conservées
 
 Tant que ton compte est actif, puis au maximum 3 ans après la fin de ta dernière période d'adhésion si tu ne la renouvelles pas : ton compte et tes données sont alors supprimés automatiquement. Tu peux aussi demander la suppression de ton compte à tout moment depuis l'application ; elle est traitée sous un mois.
 
-Le journal des actions d'administration (par exemple la suspension d'un compte ou la nomination d'un référent) est conservé 1 an. Il est anonymisé dès que le compte concerné est supprimé.
+Le journal des actions d'administration (par exemple la suspension d'un compte ou la nomination d'un admin d'asso) est conservé 1 an, et l'historique technique d'envoi des notifications 90 jours. Le journal est anonymisé dès que le compte concerné est supprimé.
 
 Tes droits
 

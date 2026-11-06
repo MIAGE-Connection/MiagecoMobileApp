@@ -152,7 +152,7 @@ export const EventsFullScreen: React.FC = () => {
       </View>
 
       {!loading && data.length > 0 ? (
-        <View>
+        <View style={styles.filters}>
           <View style={styles.searchBox}>
             <Ionicons name="search-outline" size={18} color={colors.textLight} style={{ marginRight: 8 }} />
             <TextInput
@@ -299,8 +299,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   searchInput: { flex: 1, height: 44, fontSize: 14, color: colors.text },
-  // Marge explicite hors du contenu défilant : le paddingVertical seul laissait les tuiles collées à la barre.
-  chipsScroll: { flexGrow: 0, marginTop: spacing.md, marginBottom: spacing.sm },
+  // Marge explicite hors du contenu défilant, présente même sans pastilles de villes (une seule ville) :
+  // sinon la première carte est collée à la barre de recherche.
+  filters: { marginBottom: spacing.md },
+  chipsScroll: { flexGrow: 0, marginTop: spacing.md },
   chips: { paddingHorizontal: spacing.xl, gap: 8, alignItems: 'center' },
   chip: {
     paddingHorizontal: 14,

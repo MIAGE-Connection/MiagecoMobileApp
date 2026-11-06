@@ -38,4 +38,18 @@ export const membershipSettingsService = {
     if (error) throw error;
     return Number(data ?? 0);
   },
+
+  // Met fin à l'adhésion de tous les adhérents actifs (le super admin n'est jamais concerné).
+  // Renvoie le nombre d'adhésions terminées.
+  async endAll(): Promise<number> {
+    const { data, error } = await supabase.rpc('end_all_memberships');
+    if (error) {
+      // PGRST202 / 42883 : fonction absente -> le script SQL de la phase 20 n'est pas installé.
+      if (error.code === 'PGRST202' || error.code === '42883') {
+        throw new Error("Le script SQL de la phase 20 n'a pas encore été lancé dans Supabase.");
+      }
+      throw error;
+    }
+    return Number(data ?? 0);
+  },
 };

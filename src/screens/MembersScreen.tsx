@@ -23,7 +23,7 @@ import { domainsService } from '../services/domainsService';
 
 const ROLE_LABELS: Record<Member['role'], string> = {
   member: 'Adhérent',
-  admin_association: 'Référent',
+  admin_association: "Admin de l'asso",
   admin_national: 'Admin fédération',
 };
 
@@ -95,29 +95,29 @@ export const MembersScreen: React.FC = () => {
   const handleToggleReferent = (item: Member) => {
     const name = item.full_name || item.email;
     if (item.role === 'admin_association') {
-      Alert.alert('Retirer le rôle de référent ?', `${name} redeviendra simple adhérent.`, [
+      Alert.alert("Retirer le rôle d'admin de l'asso ?", `${name} redeviendra simple adhérent.`, [
         { text: 'Annuler', style: 'cancel' },
         {
           text: 'Retirer',
           style: 'destructive',
           onPress: () =>
-            runRoleChange(item, () => membersService.setReferentRole(item.id, 'member'), `${name} n'est plus référent.`),
+            runRoleChange(item, () => membersService.setReferentRole(item.id, 'member'), `${name} n'est plus admin de l'asso.`),
         },
       ]);
       return;
     }
     const current = members.find((m) => m.role === 'admin_association');
     Alert.alert(
-      'Nommer référent ?',
+      "Nommer admin de l'asso ?",
       current
-        ? `${name} deviendra référent. ${current.full_name || current.email} redeviendra simple adhérent (un seul référent par association).`
-        : `${name} deviendra référent de l'association.`,
+        ? `${name} deviendra admin de l'asso. ${current.full_name || current.email} redeviendra simple adhérent (un seul admin par association).`
+        : `${name} deviendra admin de l'asso.`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
           text: 'Nommer',
           onPress: () =>
-            runRoleChange(item, () => membersService.assignReferent(item.id), `${name} est maintenant référent.`),
+            runRoleChange(item, () => membersService.assignReferent(item.id), `${name} est maintenant admin de l'asso.`),
         },
       ]
     );
@@ -126,15 +126,15 @@ export const MembersScreen: React.FC = () => {
   // Référent : passe son propre rôle à un autre adhérent de l'association.
   const handleTransfer = (item: Member) => {
     Alert.alert(
-      'Passer le rôle de référent ?',
-      `${item.full_name || item.email} deviendra référent et tu redeviendras simple adhérent. Tu perdras l'accès à l'espace d'administration de l'association.`,
+      "Passer le rôle d'admin de l'asso ?",
+      `${item.full_name || item.email} deviendra admin de l'asso et tu redeviendras simple adhérent. Tu perdras l'accès à l'espace d'administration de l'association.`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
           text: 'Transférer',
           style: 'destructive',
           onPress: () =>
-            runRoleChange(item, () => membersService.assignReferent(item.id), 'Le rôle de référent a été transféré.', () => {
+            runRoleChange(item, () => membersService.assignReferent(item.id), "Le rôle d'admin de l'asso a été transféré.", () => {
               // Le rôle a changé : on recharge la session, la navigation bascule
               // automatiquement sur l'espace adhérent.
               refresh();
@@ -266,7 +266,7 @@ export const MembersScreen: React.FC = () => {
                       <ActivityIndicator size="small" color={colors.primary} />
                     ) : (
                       <Text style={styles.toggleButtonText}>
-                        {item.role === 'admin_association' ? 'Retirer référent' : 'Nommer référent'}
+                        {item.role === 'admin_association' ? 'Retirer admin' : 'Nommer admin'}
                       </Text>
                     )}
                   </TouchableOpacity>

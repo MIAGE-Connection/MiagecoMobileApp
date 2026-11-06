@@ -13,6 +13,7 @@ export interface AuditEntry {
     | 'role_changed'
     | 'membership_end_changed'
     | 'membership_end_applied'
+    | 'membership_ended_all'
     | 'account_purge';
   target_label: string | null;
   details: Record<string, any>;
@@ -20,7 +21,7 @@ export interface AuditEntry {
 
 const ROLE_LABELS: Record<string, string> = {
   member: 'adhérent',
-  admin_association: 'référent',
+  admin_association: "admin de l'asso",
   admin_national: 'super admin',
 };
 
@@ -38,9 +39,9 @@ export function describeEntry(entry: AuditEntry): string {
     case 'member_reactivated':
       return `${actor} a réactivé ${target}.`;
     case 'referent_appointed':
-      return `${actor} a nommé ${target} référent${d.association ? ` de ${d.association}` : ''}.`;
+      return `${actor} a nommé ${target} admin de l'asso${d.association ? ` (${d.association})` : ''}.`;
     case 'referent_removed':
-      return `${actor} a retiré le rôle de référent à ${target}${d.association ? ` (${d.association})` : ''}.`;
+      return `${actor} a retiré le rôle d'admin de l'asso à ${target}${d.association ? ` (${d.association})` : ''}.`;
     case 'role_changed':
       return `${actor} a changé le rôle de ${target} : ${ROLE_LABELS[d.from] ?? d.from} → ${ROLE_LABELS[d.to] ?? d.to}.`;
     case 'membership_end_changed':
@@ -48,6 +49,10 @@ export function describeEntry(entry: AuditEntry): string {
     case 'membership_end_applied': {
       const count = Number(d.count ?? 0);
       return `${actor} a appliqué la fin d'adhésion à ${count} adhérent${count > 1 ? 's' : ''} actif${count > 1 ? 's' : ''}.`;
+    }
+    case 'membership_ended_all': {
+      const count = Number(d.count ?? 0);
+      return `${actor} a mis fin à l'adhésion de ${count} adhérent${count > 1 ? 's' : ''}.`;
     }
     case 'account_purge': {
       const count = Number(d.count ?? 0);

@@ -338,7 +338,7 @@ export const AdminDashboardScreen: React.FC = () => {
                 {
                   icon: 'shield-checkmark-outline',
                   label: 'Journal des actions',
-                  description: "Suspensions, référents et date de fin d'adhésion",
+                  description: "Suspensions, admins d'asso et date de fin d'adhésion",
                   onPress: () => navigation.navigate('AdminAuditLog'),
                 },
                 {
@@ -355,8 +355,8 @@ export const AdminDashboardScreen: React.FC = () => {
                 },
                 {
                   icon: 'business-outline',
-                  label: 'Associations et référents',
-                  description: 'Nommer ou retirer un référent',
+                  label: "Associations et admins d'asso",
+                  description: "Nommer ou retirer un admin d'asso",
                   onPress: () => navigation.navigate('AdminAssociations'),
                 },
                 {

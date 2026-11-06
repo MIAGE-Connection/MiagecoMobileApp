@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -9,6 +11,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -43,6 +46,10 @@ export const MembershipSettingsScreen: React.FC = () => {
   const [day, setDay] = useState(DEFAULT_END.day);
   const [activeCount, setActiveCount] = useState(0);
   const [applyNow, setApplyNow] = useState(false);
+  // Action sensible : mettre fin à toutes les adhésions (confirmation à taper).
+  const [endAllOpen, setEndAllOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [ending, setEnding] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -119,6 +126,31 @@ export const MembershipSettingsScreen: React.FC = () => {
       { text: 'Annuler', style: 'cancel' },
       { text: 'Enregistrer', onPress: runSave },
     ]);
+  };
+
+  const CONFIRM_WORD = 'TERMINER';
+
+  const openEndAll = () => {
+    setConfirmText('');
+    setEndAllOpen(true);
+  };
+
+  const runEndAll = async () => {
+    setEnding(true);
+    try {
+      const count = await membershipSettingsService.endAll();
+      setEndAllOpen(false);
+      Alert.alert(
+        'Adhésions terminées',
+        `${count} adhérent${count > 1 ? 's ont' : ' a'} basculé sur l'écran « Ton adhésion a expiré ». Chacun peut renouveler en un tap.`
+      );
+      await load();
+    } catch (e: any) {
+      console.error('MembershipSettingsScreen: end all error', e);
+      Alert.alert('Erreur', e?.message || "Impossible de terminer les adhésions.");
+    } finally {
+      setEnding(false);
+    }
   };
 
   if (loading) {
@@ -224,8 +256,65 @@ export const MembershipSettingsScreen: React.FC = () => {
           >
             {saving ? <ActivityIndicator color={colors.white} /> : <Text style={styles.saveText}>Enregistrer</Text>}
           </TouchableOpacity>
+
+          <View style={styles.dangerCard}>
+            <View style={styles.dangerHeader}>
+              <Ionicons name="warning-outline" size={20} color={colors.error} />
+              <Text style={styles.dangerTitle}>Fin d'année : terminer toutes les adhésions</Text>
+            </View>
+            <Text style={styles.dangerText}>
+              Met fin tout de suite à l'adhésion des {activeCount} adhérent{activeCount > 1 ? 's' : ''} actif
+              {activeCount > 1 ? 's' : ''} (admins d'asso compris, pas toi). Ils perdent l'accès à l'espace adhérent jusqu'à
+              ce qu'ils renouvellent en un tap.
+            </Text>
+            <TouchableOpacity
+              style={[styles.dangerButton, activeCount === 0 && styles.saveButtonDisabled]}
+              onPress={openEndAll}
+              disabled={activeCount === 0}
+            >
+              <Text style={styles.dangerButtonText}>Terminer toutes les adhésions…</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       )}
+
+      <Modal visible={endAllOpen} transparent animationType="fade" onRequestClose={() => setEndAllOpen(false)}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.modal}>
+            <View style={styles.dangerHeader}>
+              <Ionicons name="warning-outline" size={22} color={colors.error} />
+              <Text style={styles.modalTitle}>Terminer toutes les adhésions ?</Text>
+            </View>
+            <Text style={styles.modalText}>
+              {activeCount} adhérent{activeCount > 1 ? 's' : ''} perdr{activeCount > 1 ? 'ont' : 'a'} l'accès à l'espace
+              adhérent immédiatement. À leur prochaine ouverture de l'app, ils verront « Ton adhésion a expiré » et
+              pourront renouveler en un tap : leur nouvelle adhésion durera jusqu'au{' '}
+              <Text style={styles.previewStrong}>{formatDate(nextOccurrence(saved))}</Text> (réglage actuel).
+            </Text>
+            <Text style={styles.modalText}>Cette action ne peut pas être annulée en un clic.</Text>
+            <Text style={styles.modalLabel}>Pour confirmer, tape {CONFIRM_WORD} :</Text>
+            <TextInput
+              style={styles.confirmInput}
+              value={confirmText}
+              onChangeText={setConfirmText}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              placeholder={CONFIRM_WORD}
+              placeholderTextColor={colors.textLight}
+            />
+            <TouchableOpacity
+              style={[styles.dangerButton, (confirmText.trim().toUpperCase() !== CONFIRM_WORD || ending) && styles.saveButtonDisabled]}
+              onPress={runEndAll}
+              disabled={confirmText.trim().toUpperCase() !== CONFIRM_WORD || ending}
+            >
+              {ending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.dangerButtonText}>Terminer les adhésions</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelLink} onPress={() => setEndAllOpen(false)} disabled={ending}>
+              <Text style={styles.cancelLinkText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -312,4 +401,42 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: { opacity: 0.4 },
   saveText: { color: colors.white, fontWeight: '800', fontSize: 15 },
+  dangerCard: {
+    marginTop: spacing.xxl,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: colors.error,
+    backgroundColor: colors.white,
+    padding: spacing.lg,
+  },
+  dangerHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  dangerTitle: { flex: 1, fontSize: 14, fontWeight: '800', color: colors.error },
+  dangerText: { fontSize: 13, lineHeight: 19, color: colors.text, marginTop: spacing.sm },
+  dangerButton: {
+    marginTop: spacing.lg,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dangerButtonText: { color: colors.white, fontWeight: '800', fontSize: 14 },
+  overlay: { flex: 1, backgroundColor: 'rgba(14,26,74,0.5)', justifyContent: 'center', padding: spacing.xl },
+  modal: { backgroundColor: colors.white, borderRadius: 20, padding: spacing.xl },
+  modalTitle: { flex: 1, fontSize: 17, fontWeight: '800', color: colors.text },
+  modalText: { fontSize: 13, lineHeight: 19, color: colors.text, marginTop: spacing.md },
+  modalLabel: { fontSize: 12, fontWeight: '700', color: colors.textLight, marginTop: spacing.lg, marginBottom: 6 },
+  confirmInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: colors.text,
+  },
+  cancelLink: { height: 44, alignItems: 'center', justifyContent: 'center', marginTop: spacing.xs },
+  cancelLinkText: { color: colors.primary, fontWeight: '700', fontSize: 14 },
 });

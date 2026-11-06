@@ -1,6 +1,8 @@
 import { supabase } from './supabase';
+import { resizeTarget } from '../utils/imageSizing';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
-import { Platform } from 'react-native';
+import { Image, Platform } from 'react-native';
 
 export interface Association {
   id: string;
@@ -21,6 +23,26 @@ export interface Association {
   is_published?: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+// Réduit et compresse l'image avant l'envoi : un logo de 3 Mo pris à la galerie devient ~10-25 Ko.
+// WebP garde la transparence des logos (contrairement au JPEG, qui les noircit).
+// En cas de problème on envoie l'image d'origine plutôt que de bloquer l'utilisateur.
+async function optimizeImage(uri: string, kind: 'banner' | 'logo'): Promise<string> {
+  try {
+    const { width, height } = await new Promise<{ width: number; height: number }>((resolve, reject) =>
+      Image.getSize(uri, (w, h) => resolve({ width: w, height: h }), reject)
+    );
+    const resize = resizeTarget(kind, width, height);
+    const result = await ImageManipulator.manipulateAsync(uri, resize ? [{ resize }] : [], {
+      compress: 0.8,
+      format: ImageManipulator.SaveFormat.WEBP,
+    });
+    return result.uri;
+  } catch (error) {
+    console.warn("optimizeImage: envoi de l'image d'origine", error);
+    return uri;
+  }
 }
 
 export const associationService = {
@@ -124,19 +146,25 @@ export const associationService = {
   ): Promise<string> {
     if (!associationId) throw new Error('ID de l\'association manquant');
 
-    const path = `${associationId}/${kind}-${Date.now()}.jpg`;
+    const isWeb = Platform.OS === 'web';
+    const optimizedUri = isWeb ? imageUri : await optimizeImage(imageUri, kind);
+    // Sur mobile l'image sort de optimizeImage en WebP ; sur le web on garde l'image telle quelle.
+    const ext = isWeb ? 'jpg' : 'webp';
+    const mime = isWeb ? 'image/jpeg' : 'image/webp';
+
+    const path = `${associationId}/${kind}-${Date.now()}.${ext}`;
     let body: any;
-    if (Platform.OS === 'web') {
-      body = await (await fetch(imageUri)).blob();
+    if (isWeb) {
+      body = await (await fetch(optimizedUri)).blob();
     } else {
       const form = new FormData();
-      form.append('file', { uri: imageUri, name: `${kind}.jpg`, type: 'image/jpeg' } as any);
+      form.append('file', { uri: optimizedUri, name: `${kind}.${ext}`, type: mime } as any);
       body = form;
     }
 
     const { error: uploadError } = await supabase.storage
       .from('associations')
-      .upload(path, body, { contentType: 'image/jpeg', upsert: true });
+      .upload(path, body, { contentType: mime, upsert: true });
     if (uploadError) throw uploadError;
 
     const { data: urlData } = supabase.storage.from('associations').getPublicUrl(path);

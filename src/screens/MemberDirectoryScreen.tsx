@@ -147,7 +147,7 @@ export const MemberDirectoryScreen: React.FC = () => {
                 <Text style={styles.memberName}>{item.full_name || 'Adhérent'}</Text>
                 {item.is_referent ? (
                   <View style={styles.referentBadge}>
-                    <Text style={styles.referentBadgeText}>Référent</Text>
+                    <Text style={styles.referentBadgeText}>Admin de l'asso</Text>
                   </View>
                 ) : null}
               </View>
@@ -170,7 +170,7 @@ export const MemberDirectoryScreen: React.FC = () => {
             <Text style={sheetStyles.title}>{selected.full_name || 'Adhérent'}</Text>
             {selected.is_referent ? (
               <View style={[styles.referentBadge, { alignSelf: 'flex-start', marginTop: 8 }]}>
-                <Text style={styles.referentBadgeText}>Référent de l'association</Text>
+                <Text style={styles.referentBadgeText}>Admin de l'asso</Text>
               </View>
             ) : null}
             {selected.association_name ? <Text style={sheetStyles.meta}>{selected.association_name}</Text> : null}

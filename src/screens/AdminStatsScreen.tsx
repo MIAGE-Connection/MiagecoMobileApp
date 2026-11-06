@@ -136,7 +136,7 @@ export const AdminStatsScreen: React.FC = () => {
           assoName(p.association_id),
           p.member_positions?.label ?? p.position_in_association,
           p.graduation_year,
-          p.role === 'admin_association' ? 'Référent' : 'Adhérent',
+          p.role === 'admin_association' ? "Admin d'asso" : 'Adhérent',
           p.valid_until,
           p.is_suspended ? 'Suspendu' : stats.isActive(p) ? 'Actif' : 'Expiré',
         ]
@@ -181,7 +181,7 @@ export const AdminStatsScreen: React.FC = () => {
             <Tile label="Adhérents actifs" value={stats.active} sub={`sur ${stats.total} comptes`} />
             <Tile label="À renouveler" value={stats.soon.length} sub={`sous ${SOON_DAYS} jours`} warn={stats.soon.length > 0} />
             <Tile label="Suspendus" value={stats.suspended} />
-            <Tile label="Assos sans référent" value={stats.withoutReferent} warn={stats.withoutReferent > 0} />
+            <Tile label="Assos sans admin" value={stats.withoutReferent} warn={stats.withoutReferent > 0} />
           </View>
 
           <Text style={styles.sectionTitle}>Par association</Text>
@@ -192,7 +192,7 @@ export const AdminStatsScreen: React.FC = () => {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowTitle}>{asso.name}</Text>
                   <Text style={styles.rowSub}>
-                    {asso.hasReferent ? 'Référent désigné' : 'Aucun référent'}
+                    {asso.hasReferent ? 'Admin désigné' : 'Aucun admin'}
                     {asso.soon > 0 ? ` · ${asso.soon} à renouveler` : ''}
                   </Text>
                 </View>

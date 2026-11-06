@@ -18,10 +18,10 @@ describe('describeEntry', () => {
 
   it("nomme l'association d'un référent", () => {
     expect(describeEntry(entry({ action: 'referent_appointed', details: { association: 'MIAGE Lyon' } }))).toBe(
-      'Rayan a nommé Léa Martin référent de MIAGE Lyon.'
+      "Rayan a nommé Léa Martin admin de l'asso (MIAGE Lyon)."
     );
     expect(describeEntry(entry({ action: 'referent_removed', details: { association: 'MIAGE Lyon' } }))).toBe(
-      'Rayan a retiré le rôle de référent à Léa Martin (MIAGE Lyon).'
+      "Rayan a retiré le rôle d'admin de l'asso à Léa Martin (MIAGE Lyon)."
     );
   });
 
@@ -54,6 +54,12 @@ describe('describeEntry', () => {
     );
     expect(describeEntry(entry({ action: 'membership_end_applied', details: { count: 42 } }))).toBe(
       "Rayan a appliqué la fin d'adhésion à 42 adhérents actifs."
+    );
+    expect(describeEntry(entry({ action: 'membership_ended_all', details: { count: 1 } }))).toBe(
+      "Rayan a mis fin à l'adhésion de 1 adhérent."
+    );
+    expect(describeEntry(entry({ action: 'membership_ended_all', details: { count: 120 } }))).toBe(
+      "Rayan a mis fin à l'adhésion de 120 adhérents."
     );
     expect(describeEntry(entry({ action: 'account_purge', actor_label: null, details: { count: 3 } }))).toBe(
       'Suppression automatique de 3 comptes (adhésion terminée depuis plus de 3 ans).'

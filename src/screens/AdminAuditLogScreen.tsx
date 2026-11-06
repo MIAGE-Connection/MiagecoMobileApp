@@ -25,6 +25,7 @@ const ICONS: Record<AuditEntry['action'], { icon: keyof typeof Ionicons.glyphMap
   role_changed: { icon: 'swap-horizontal-outline', color: colors.highlight },
   membership_end_changed: { icon: 'calendar-outline', color: colors.primary },
   membership_end_applied: { icon: 'calendar-number-outline', color: colors.primary },
+  membership_ended_all: { icon: 'people-outline', color: colors.error },
   account_purge: { icon: 'trash-outline', color: colors.textLight },
 };
 
@@ -112,7 +113,7 @@ export const AdminAuditLogScreen: React.FC = () => {
         onEndReachedThreshold={0.4}
         ListHeaderComponent={
           <Text style={styles.intro}>
-            Suspensions, référents et date de fin d'adhésion. Les actions faites directement dans Supabase apparaissent
+            Suspensions, admins d'asso et date de fin d'adhésion. Les actions faites directement dans Supabase apparaissent
             sans auteur. Conservé 1 an.
           </Text>
         }
